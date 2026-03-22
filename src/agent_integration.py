@@ -1,5 +1,7 @@
 """Foundry Agent integration for BYO Thread Storage (FR-006)."""
 
+import os
+
 from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
 
@@ -47,8 +49,6 @@ def run_agent_conversation(
         ValueError: ``AZURE_AI_PROJECT_ENDPOINT`` environment variable is
             not configured.
     """
-    import os
-
     project_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT")
     if not project_endpoint:
         raise ValueError(
@@ -104,7 +104,7 @@ def run_agent_conversation(
                     role=hist_msg["role"],
                     content=hist_msg["content"],
                 )
-        run = agents_client.create_and_process_run(
+        agents_client.create_and_process_run(
             thread_id=foundry_thread.id,
             agent_id=agent.id,
         )
