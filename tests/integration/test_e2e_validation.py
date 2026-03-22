@@ -109,11 +109,7 @@ class TestUS1CreateAndPersistThread:
 
         # Verify Cosmos DB received the document
         mock_container.create_item.assert_called_once()
-        written = mock_container.create_item.call_args.kwargs.get(
-            "body", mock_container.create_item.call_args[1].get("body")
-        )
-        if written is None:
-            written = mock_container.create_item.call_args[0][0]
+        written = mock_container.create_item.call_args.kwargs["body"]
 
         assert written["id"] == thread.id
         assert written["user_id"] == _USER_ID
