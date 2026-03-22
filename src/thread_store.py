@@ -160,9 +160,7 @@ class CosmosThreadStore:
 
         for attempt in range(_MAX_ETAG_RETRIES):
             try:
-                raw = self._container.read_item(
-                    item=thread_id, partition_key=user_id
-                )
+                raw = self._container.read_item(item=thread_id, partition_key=user_id)
             except exceptions.CosmosResourceNotFoundError as exc:
                 raise ThreadNotFoundError(
                     f"Thread '{thread_id}' not found for user '{user_id}'."
@@ -256,9 +254,7 @@ class CosmosThreadStore:
             StorageConnectionError: Cosmos DB operation failed.
         """
         try:
-            raw = self._container.read_item(
-                item=thread_id, partition_key=user_id
-            )
+            raw = self._container.read_item(item=thread_id, partition_key=user_id)
         except exceptions.CosmosResourceNotFoundError as exc:
             raise ThreadNotFoundError(
                 f"Thread '{thread_id}' not found for user '{user_id}'."
@@ -291,9 +287,7 @@ class CosmosThreadStore:
             "SELECT c.id, c.user_id, c.created_at, c.updated_at, c.metadata "
             "FROM c WHERE c.user_id = @user_id"
         )
-        parameters: list[dict[str, Any]] = [
-            {"name": "@user_id", "value": user_id}
-        ]
+        parameters: list[dict[str, Any]] = [{"name": "@user_id", "value": user_id}]
         try:
             items = list(
                 self._container.query_items(
@@ -338,9 +332,7 @@ class CosmosThreadStore:
             StorageConnectionError: Cosmos DB operation failed.
         """
         try:
-            self._container.delete_item(
-                item=thread_id, partition_key=user_id
-            )
+            self._container.delete_item(item=thread_id, partition_key=user_id)
         except exceptions.CosmosResourceNotFoundError as exc:
             raise ThreadNotFoundError(
                 f"Thread '{thread_id}' not found for user '{user_id}'."

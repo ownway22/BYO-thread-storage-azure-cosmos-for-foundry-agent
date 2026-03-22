@@ -46,11 +46,7 @@ class ThreadStoreConfig:
 
         return cls(
             cosmos_endpoint=endpoint,
-            cosmos_database_name=os.getenv(
-                "COSMOS_DATABASE_NAME", "thread_storage"
-            ),
-            cosmos_container_name=os.getenv(
-                "COSMOS_CONTAINER_NAME", "threads"
-            ),
+            cosmos_database_name=os.getenv("COSMOS_DATABASE_NAME", "thread_storage"),
+            cosmos_container_name=os.getenv("COSMOS_CONTAINER_NAME", "threads"),
             azure_ai_project_endpoint=os.getenv("AZURE_AI_PROJECT_ENDPOINT"),
         )
