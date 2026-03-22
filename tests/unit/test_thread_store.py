@@ -1,4 +1,4 @@
-"""Unit tests for CosmosThreadStore.__init__() and initialize() — T008."""
+"""Unit tests for CosmosThreadStore.__init__(), initialize(), and create_thread() — T008/T009."""
 
 from unittest.mock import MagicMock, patch
 
@@ -6,6 +6,7 @@ import pytest
 from azure.cosmos import PartitionKey, exceptions as cosmos_exceptions
 
 from src.exceptions import StorageConnectionError
+from src.models import Thread
 from src.thread_store import CosmosThreadStore
 
 
@@ -200,5 +201,103 @@ class TestCosmosThreadStoreInitialize:
 
         with pytest.raises(StorageConnectionError) as exc_info:
             store.initialize()
+
+        assert exc_info.value.__cause__ is original
+
+
+# ---------------------------------------------------------------------------
+# create_thread()
+# ---------------------------------------------------------------------------
+
+
+class TestCosmosThreadStoreCreateThread:
+    """Tests for CosmosThreadStore.create_thread() — FR-001 / T009."""
+
+    def _make_initialized_store(self) -> tuple[CosmosThreadStore, MagicMock]:
+        """Return a store with a mocked CosmosClient and container already set."""
+        mock_client = MagicMock()
+        mock_container = MagicMock()
+        with patch("src.thread_store.DefaultAzureCredential"), patch(
+            "src.thread_store.CosmosClient", return_value=mock_client
+        ):
+            store = CosmosThreadStore(
+                endpoint=_ENDPOINT,
+                database_name=_DATABASE,
+                container_name=_CONTAINER,
+            )
+        # Simulate post-initialize() state
+        store._container = mock_container
+        return store, mock_container
+
+    def test_returns_thread_object(self) -> None:
+        """create_thread() returns a Thread instance."""
+        store, _ = self._make_initialized_store()
+
+        result = store.create_thread(user_id="user-001")
+
+        assert isinstance(result, Thread)
+
+    def test_thread_has_correct_structure(self) -> None:
+        """Returned Thread contains id, user_id, messages=[], created_at, updated_at, metadata."""
+        store, _ = self._make_initialized_store()
+
+        thread = store.create_thread(user_id="user-001")
+
+        assert thread.user_id == "user-001"
+        assert thread.id  # non-empty UUID string
+        assert thread.messages == []
+        assert thread.created_at
+        assert thread.updated_at
+        assert isinstance(thread.metadata, dict)
+
+    def test_calls_create_item_with_serialized_thread(self) -> None:
+        """create_thread() calls container.create_item with thread.to_dict()."""
+        store, mock_container = self._make_initialized_store()
+
+        thread = store.create_thread(user_id="user-001")
+
+        mock_container.create_item.assert_called_once_with(
+            body=thread.to_dict()
+        )
+
+    def test_metadata_defaults_to_empty_dict_when_none(self) -> None:
+        """create_thread() with metadata=None stores {} in the Thread."""
+        store, _ = self._make_initialized_store()
+
+        thread = store.create_thread(user_id="user-001", metadata=None)
+
+        assert thread.metadata == {}
+
+    def test_metadata_stored_when_provided(self) -> None:
+        """create_thread() stores caller-supplied metadata in the Thread."""
+        store, _ = self._make_initialized_store()
+        meta = {"title": "My Chat", "agent_id": "agent-42"}
+
+        thread = store.create_thread(user_id="user-001", metadata=meta)
+
+        assert thread.metadata == meta
+
+    def test_raises_storage_connection_error_on_cosmos_http_error(self) -> None:
+        """CosmosHttpResponseError during create_item → StorageConnectionError."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.create_item.side_effect = (
+            cosmos_exceptions.CosmosHttpResponseError(
+                message="Service unavailable"
+            )
+        )
+
+        with pytest.raises(StorageConnectionError, match="Failed to create thread"):
+            store.create_thread(user_id="user-001")
+
+    def test_storage_connection_error_chains_cosmos_exception(self) -> None:
+        """StorageConnectionError is raised 'from' the original CosmosHttpResponseError."""
+        store, mock_container = self._make_initialized_store()
+        original = cosmos_exceptions.CosmosHttpResponseError(
+            message="timeout"
+        )
+        mock_container.create_item.side_effect = original
+
+        with pytest.raises(StorageConnectionError) as exc_info:
+            store.create_thread(user_id="user-001")
 
         assert exc_info.value.__cause__ is original
