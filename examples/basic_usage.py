@@ -75,12 +75,33 @@ def main() -> None:
     # ------------------------------------------------------------------
     fetched = store.get_thread(thread.id, user_id)
     print(f"\n✓ get_thread returned thread {fetched.id}")
-    print(f"  messages count: {len(fetched.messages)}")
+    print(f"  user_id    : {fetched.user_id}")
+    print(f"  created_at : {fetched.created_at}")
+    print(f"  updated_at : {fetched.updated_at}")
+    print(f"  metadata   : {fetched.metadata}")
+    print(f"  messages   : {len(fetched.messages)} message(s)")
+    for msg in fetched.messages:
+        print(f"    [{msg.role:9s}] {msg.content[:60]}")
+
+    # Create a second thread so list_threads demonstrates multiple results
+    thread2 = store.create_thread(
+        user_id=user_id,
+        metadata={"title": "Second example thread"},
+    )
+    print(f"\n✓ Second thread created: {thread2.id}")
 
     all_threads = store.list_threads(user_id)
     print(f"\n✓ list_threads returned {len(all_threads)} thread(s):")
     for t in all_threads:
-        print(f"  Thread {t.id} — updated: {t.updated_at}")
+        print(f"  Thread {t.id}")
+        print(f"    user_id    : {t.user_id}")
+        print(f"    created_at : {t.created_at}")
+        print(f"    updated_at : {t.updated_at}")
+        print(f"    metadata   : {t.metadata}")
+
+    # Clean up the second thread before proceeding to US4 deletion demo
+    store.delete_thread(thread2.id, user_id)
+    print(f"\n✓ Second thread {thread2.id} cleaned up")
 
     # ------------------------------------------------------------------
     # US4: Delete the thread and verify
