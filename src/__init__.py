@@ -1,5 +1,6 @@
 """Public API for byo-thread-storage."""
 
+from src.agent_integration import run_agent_conversation
 from src.config import ThreadStoreConfig
 from src.exceptions import (
     AccessDeniedError,
@@ -20,4 +21,5 @@ __all__ = [
     "ThreadNotFoundError",
     "AccessDeniedError",
     "StorageConnectionError",
+    "run_agent_conversation",
 ]
