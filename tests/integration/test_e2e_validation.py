@@ -174,12 +174,7 @@ class TestUS2AppendMessagesAndPreserveHistory:
 
         # Verify the replace_item call updated the document
         mock_container.replace_item.assert_called_once()
-        replaced_body = mock_container.replace_item.call_args.kwargs.get(
-            "body",
-            mock_container.replace_item.call_args[0][1]
-            if mock_container.replace_item.call_args[0]
-            else mock_container.replace_item.call_args[1]["body"],
-        )
+        replaced_body = mock_container.replace_item.call_args.kwargs["body"]
         assert len(replaced_body["messages"]) == 1
         assert replaced_body["messages"][0]["role"] == "user"
         assert replaced_body["messages"][0]["content"] == "Hello!"
