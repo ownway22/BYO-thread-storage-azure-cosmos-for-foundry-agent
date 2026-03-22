@@ -49,6 +49,7 @@ def main() -> None:
     print(f"\n✓ Thread created: {thread.id}")
     print(f"  user_id   : {thread.user_id}")
     print(f"  created_at: {thread.created_at}")
+    print(f"  updated_at: {thread.updated_at}")
     print(f"  messages  : {thread.messages}")
     print(f"  metadata  : {thread.metadata}")
 
