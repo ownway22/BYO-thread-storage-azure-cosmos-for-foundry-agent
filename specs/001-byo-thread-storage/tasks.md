@@ -19,10 +19,10 @@
 
 **目的**：建立專案目錄結構與基礎配置檔案
 
-- [ ] T001 根據 plan.md 建立專案目錄結構：src/、tests/unit/、tests/integration/、tests/contract/、examples/，以及所有必要的 __init__.py 檔案
-- [ ] T002 [P] 建立 pyproject.toml，設定專案名稱 byo-thread-storage、Python ≥3.11、相依套件（azure-cosmos≥4.7.0、azure-identity、azure-ai-projects、python-dotenv）、Black 88 字元行寬
-- [ ] T003 [P] 建立 requirements.txt，包含 azure-cosmos>=4.7.0、azure-identity、azure-ai-projects、python-dotenv
-- [ ] T004 [P] 建立 .env.sample，包含 COSMOS_ENDPOINT（必填）、COSMOS_DATABASE_NAME=thread_storage、COSMOS_CONTAINER_NAME=threads、AZURE_AI_PROJECT_ENDPOINT 各項環境變數說明
+- [x] T001 根據 plan.md 建立專案目錄結構：src/、tests/unit/、tests/integration/、tests/contract/、examples/，以及所有必要的 __init__.py 檔案
+- [x] T002 [P] 建立 pyproject.toml，設定專案名稱 byo-thread-storage、Python ≥3.11、相依套件（azure-cosmos≥4.7.0、azure-identity、azure-ai-projects、python-dotenv）、Black 88 字元行寬
+- [x] T003 [P] 建立 requirements.txt，包含 azure-cosmos>=4.7.0、azure-identity、azure-ai-projects、python-dotenv
+- [x] T004 [P] 建立 .env.sample，包含 COSMOS_ENDPOINT（必填）、COSMOS_DATABASE_NAME=thread_storage、COSMOS_CONTAINER_NAME=threads、AZURE_AI_PROJECT_ENDPOINT 各項環境變數說明
 
 ---
 
@@ -32,10 +32,10 @@
 
 **⚠️ 重要**：此階段完成前不可開始任何使用者故事工作
 
-- [ ] T005 [P] 依據 data-model.md 在 src/models.py 建立 Thread、Message 與 ThreadSummary dataclass，包含所有欄位（Thread：id、user_id、messages、created_at、updated_at、metadata；ThreadSummary：id、user_id、created_at、updated_at、metadata）、預設值工廠、以及 Thread 的 to_dict()/from_dict() 序列化方法
-- [ ] T006 [P] 依據 contracts/thread_storage_api.md 在 src/exceptions.py 建立四個自訂例外類別：ThreadStorageError（基礎類別）、ThreadNotFoundError、AccessDeniedError（預留供未來 RBAC 擴充，目前不會被觸發）、StorageConnectionError（FR-009）
-- [ ] T007 [P] 依據 contracts/thread_storage_api.md 在 src/config.py 建立 ThreadStoreConfig dataclass，包含 cosmos_endpoint（必填）、cosmos_database_name（預設 thread_storage）、cosmos_container_name（預設 threads）、azure_ai_project_endpoint（選填），以及 from_env() classmethod 透過 python-dotenv 載入環境變數（FR-012）
-- [ ] T008 依據 contracts/thread_storage_api.md 在 src/thread_store.py 實作 CosmosThreadStore 類別的 __init__() 建構子（以 DefaultAzureCredential 建立 CosmosClient，FR-008）與 initialize() 方法（自動建立資料庫與容器，分割鍵 /user_id，FR-011），並在連線失敗時拋出 StorageConnectionError
+- [x] T005 [P] 依據 data-model.md 在 src/models.py 建立 Thread、Message 與 ThreadSummary dataclass，包含所有欄位（Thread：id、user_id、messages、created_at、updated_at、metadata；ThreadSummary：id、user_id、created_at、updated_at、metadata）、預設值工廠、以及 Thread 的 to_dict()/from_dict() 序列化方法
+- [x] T006 [P] 依據 contracts/thread_storage_api.md 在 src/exceptions.py 建立四個自訂例外類別：ThreadStorageError（基礎類別）、ThreadNotFoundError、AccessDeniedError（預留供未來 RBAC 擴充，目前不會被觸發）、StorageConnectionError（FR-009）
+- [x] T007 [P] 依據 contracts/thread_storage_api.md 在 src/config.py 建立 ThreadStoreConfig dataclass，包含 cosmos_endpoint（必填）、cosmos_database_name（預設 thread_storage）、cosmos_container_name（預設 threads）、azure_ai_project_endpoint（選填），以及 from_env() classmethod 透過 python-dotenv 載入環境變數（FR-012）
+- [x] T008 依據 contracts/thread_storage_api.md 在 src/thread_store.py 實作 CosmosThreadStore 類別的 __init__() 建構子（以 DefaultAzureCredential 建立 CosmosClient，FR-008）與 initialize() 方法（自動建立資料庫與容器，分割鍵 /user_id，FR-011），並在連線失敗時拋出 StorageConnectionError
 
 **檢查點**：基礎建設就緒——CosmosThreadStore 可初始化並連線至 Cosmos DB，現在可以開始使用者故事實作
 
@@ -49,8 +49,8 @@
 
 ### 使用者故事 1 的實作
 
-- [ ] T009 [US1] 在 src/thread_store.py 實作 create_thread(user_id, metadata) 方法：建立 Thread 物件、以 to_dict() 序列化後寫入 Cosmos DB 容器、回傳 Thread 物件（FR-001）
-- [ ] T010 [US1] 建立 examples/basic_usage.py，示範初始化 CosmosThreadStore、呼叫 create_thread 建立新執行緒、印出執行緒 ID 與結構（參考 quickstart.md 第 3 節）
+- [x] T009 [US1] 在 src/thread_store.py 實作 create_thread(user_id, metadata) 方法：建立 Thread 物件、以 to_dict() 序列化後寫入 Cosmos DB 容器、回傳 Thread 物件（FR-001）
+- [x] T010 [US1] 建立 examples/basic_usage.py，示範初始化 CosmosThreadStore、呼叫 create_thread 建立新執行緒、印出執行緒 ID 與結構（參考 quickstart.md 第 3 節）
 
 **檢查點**：使用者故事 1 完成——可建立並持久化新對話執行緒至 Cosmos DB
 
@@ -64,10 +64,10 @@
 
 ### 使用者故事 2 的實作
 
-- [ ] T011 [US2] 在 src/thread_store.py 實作 append_message(thread_id, user_id, role, content) 方法：先驗證 role 必須是 "system"、"user"、"assistant" 之一（否則拋出 ValueError），再以 point read 取得執行緒文件（user_id 分割鍵天然隔離，FR-013），以 Read → Modify → Replace（ETag 樂觀並行，衝突時最多重試 3 次）將新 Message 追加至 messages 陣列尾端並更新 updated_at，回傳新建的 Message 物件（FR-002）
-- [ ] T012 [US2] 在 src/thread_store.py 實作 get_messages(thread_id, user_id) 方法：以 point read 取得執行緒文件、驗證歸屬權（FR-013），回傳完整訊息列表（不做截斷，FR-004、FR-007）
-- [ ] T013 [US2] 在 src/agent_integration.py 實作 run_agent_conversation(store, user_id, user_message, thread_id=None, agent_id=None) 函式：若 thread_id 為 None 則呼叫 create_thread 建立新執行緒，呼叫 append_message 持久化使用者訊息，以 get_messages 取回完整歷史，透過 AIProjectClient 將歷史送至 Foundry Agent 模型取得回覆（若 agent_id 為 None 則使用預設 Agent），再呼叫 append_message 持久化 Agent 回覆，回傳 (reply, thread_id)（FR-006、FR-007）
-- [ ] T014 [US2] 建立 examples/agent_chat.py，示範多輪對話流程：初始化 store、第一輪建立新執行緒、第二輪延續同一執行緒、印出每輪的 Agent 回覆以驗證上下文保留（參考 quickstart.md 第 4 節）
+- [x] T011 [US2] 在 src/thread_store.py 實作 append_message(thread_id, user_id, role, content) 方法：先驗證 role 必須是 "system"、"user"、"assistant" 之一（否則拋出 ValueError），再以 point read 取得執行緒文件（user_id 分割鍵天然隔離，FR-013），以 Read → Modify → Replace（ETag 樂觀並行，衝突時最多重試 3 次）將新 Message 追加至 messages 陣列尾端並更新 updated_at，回傳新建的 Message 物件（FR-002）
+- [x] T012 [US2] 在 src/thread_store.py 實作 get_messages(thread_id, user_id) 方法：以 point read 取得執行緒文件、驗證歸屬權（FR-013），回傳完整訊息列表（不做截斷，FR-004、FR-007）
+- [x] T013 [US2] 在 src/agent_integration.py 實作 run_agent_conversation(store, user_id, user_message, thread_id=None, agent_id=None) 函式：若 thread_id 為 None 則呼叫 create_thread 建立新執行緒，呼叫 append_message 持久化使用者訊息，以 get_messages 取回完整歷史，透過 AIProjectClient 將歷史送至 Foundry Agent 模型取得回覆（若 agent_id 為 None 則使用預設 Agent），再呼叫 append_message 持久化 Agent 回覆，回傳 (reply, thread_id)（FR-006、FR-007）
+- [x] T014 [US2] 建立 examples/agent_chat.py，示範多輪對話流程：初始化 store、第一輪建立新執行緒、第二輪延續同一執行緒、印出每輪的 Agent 回覆以驗證上下文保留（參考 quickstart.md 第 4 節）
 
 **檢查點**：使用者故事 2 完成——可追加訊息、取回完整歷史，並與 Foundry Agent 進行多輪上下文對話
 
@@ -81,9 +81,9 @@
 
 ### 使用者故事 3 的實作
 
-- [ ] T015 [US3] 在 src/thread_store.py 實作 get_thread(thread_id, user_id) 方法：以 point read（id + partition key）取得完整 Thread 文件，以 from_dict() 反序列化為 Thread 物件回傳；若文件不存在則拋出 ThreadNotFoundError（FR-003、FR-013）
-- [ ] T016 [US3] 在 src/thread_store.py 實作 list_threads(user_id) 方法：以 user_id 為分割鍵執行查詢，僅回傳摘要欄位（id、user_id、created_at、updated_at、metadata），回傳 list[ThreadSummary]（FR-010、憲章原則 II）
-- [ ] T017 [US3] 更新 examples/basic_usage.py，新增 get_thread 與 list_threads 的使用範例，展示查詢單一執行緒與列出使用者所有執行緒
+- [x] T015 [US3] 在 src/thread_store.py 實作 get_thread(thread_id, user_id) 方法：以 point read（id + partition key）取得完整 Thread 文件，以 from_dict() 反序列化為 Thread 物件回傳；若文件不存在則拋出 ThreadNotFoundError（FR-003、FR-013）
+- [x] T016 [US3] 在 src/thread_store.py 實作 list_threads(user_id) 方法：以 user_id 為分割鍵執行查詢，僅回傳摘要欄位（id、user_id、created_at、updated_at、metadata），回傳 list[ThreadSummary]（FR-010、憲章原則 II）
+- [x] T017 [US3] 更新 examples/basic_usage.py，新增 get_thread 與 list_threads 的使用範例，展示查詢單一執行緒與列出使用者所有執行緒
 
 **檢查點**：使用者故事 3 完成——可查詢特定執行緒完整資料，以及列出使用者的所有歷史對話清單
 
@@ -97,8 +97,8 @@
 
 ### 使用者故事 4 的實作
 
-- [ ] T018 [US4] 在 src/thread_store.py 實作 delete_thread(thread_id, user_id) 方法：以 partition key（user_id）+ id（thread_id）執行 delete_item，若不存在則拋出 ThreadNotFoundError（FR-005、FR-013）
-- [ ] T019 [US4] 更新 examples/basic_usage.py，新增 delete_thread 的使用範例與刪除後查詢驗證
+- [x] T018 [US4] 在 src/thread_store.py 實作 delete_thread(thread_id, user_id) 方法：以 partition key（user_id）+ id（thread_id）執行 delete_item，若不存在則拋出 ThreadNotFoundError（FR-005、FR-013）
+- [x] T019 [US4] 更新 examples/basic_usage.py，新增 delete_thread 的使用範例與刪除後查詢驗證
 
 **檢查點**：使用者故事 4 完成——可永久刪除指定執行緒，刪除後查詢確認已不存在
 
@@ -108,8 +108,8 @@
 
 **目的**：文件撰寫、完整性驗證、quickstart 端到端驗證
 
-- [ ] T020 [P] 建立 README.md，包含專案概述、前提條件、安裝步驟、環境變數設定、基本使用範例、Foundry Agent 整合說明，以及檔案結構說明
-- [ ] T021 程式碼清理：確認所有模組的 import 正確、src/__init__.py 匯出公開 API（CosmosThreadStore、Thread、Message、ThreadSummary、ThreadStoreConfig、例外類別）、遵循 PEP 8 與 Black 88 字元格式
+- [x] T020 [P] 建立 README.md，包含專案概述、前提條件、安裝步驟、環境變數設定、基本使用範例、Foundry Agent 整合說明，以及檔案結構說明
+- [x] T021 程式碼清理：確認所有模組的 import 正確、src/__init__.py 匯出公開 API（CosmosThreadStore、Thread、Message、ThreadSummary、ThreadStoreConfig、例外類別）、遵循 PEP 8 與 Black 88 字元格式
 - [ ] T022 依據 quickstart.md 執行端到端驗證：安裝相依、設定環境變數、執行 basic_usage.py 與 agent_chat.py，確認所有 13 項功能需求（FR-001 ~ FR-013）與 5 項成功標準（SC-001 ~ SC-005）皆已滿足。同時逐一驗證 spec.md 中 4 個使用者故事的 9 個驗收情境（US1×2、US2×3、US3×2、US4×2）。其中 SC-001 驗證方式：確認從安裝依賴到成功建立第一個執行緒不超過 5 個操作步驟；SC-003 驗證方式：以 Python `time` 模組計時各 CRUD 操作，確認單次操作在同區域環境下不超過 3 秒
 
 ---

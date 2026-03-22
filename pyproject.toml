@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "byo-thread-storage"
+version = "0.1.0"
+description = "BYO Thread Storage — Azure Cosmos DB as conversation thread storage for Microsoft Foundry Agent"
+requires-python = ">=3.11"
+dependencies = [
+    "azure-cosmos>=4.7.0",
+    "azure-identity",
+    "azure-ai-projects",
+    "python-dotenv",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
