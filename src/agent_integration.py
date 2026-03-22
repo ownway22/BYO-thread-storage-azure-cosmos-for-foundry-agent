@@ -68,9 +68,7 @@ def run_agent_conversation(
     messages = store.get_messages(thread_id, user_id)
 
     # Step 4: Build message payload and send to Foundry Agent
-    message_payload = [
-        {"role": msg.role, "content": msg.content} for msg in messages
-    ]
+    message_payload = [{"role": msg.role, "content": msg.content} for msg in messages]
 
     project_client = AIProjectClient(
         endpoint=project_endpoint,
@@ -108,9 +106,7 @@ def run_agent_conversation(
             thread_id=foundry_thread.id,
             agent_id=agent.id,
         )
-        response_messages = agents_client.list_messages(
-            thread_id=foundry_thread.id
-        )
+        response_messages = agents_client.list_messages(thread_id=foundry_thread.id)
         reply = ""
         for resp_msg in response_messages.data:
             if resp_msg.role == "assistant":
