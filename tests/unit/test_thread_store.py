@@ -1,13 +1,13 @@
-"""Unit tests for CosmosThreadStore.__init__(), initialize(), and create_thread() — T008/T009."""
+"""Unit tests for CosmosThreadStore.__init__(), initialize(), create_thread(), and append_message() — T008/T009/T011."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from azure.cosmos import PartitionKey, exceptions as cosmos_exceptions
 
-from src.exceptions import StorageConnectionError
-from src.models import Thread
-from src.thread_store import CosmosThreadStore
+from src.exceptions import StorageConnectionError, ThreadNotFoundError
+from src.models import Message, Thread
+from src.thread_store import CosmosThreadStore, _MAX_ETAG_RETRIES
 
 
 _ENDPOINT = "https://test-account.documents.azure.com:443/"
@@ -301,3 +301,369 @@ class TestCosmosThreadStoreCreateThread:
             store.create_thread(user_id="user-001")
 
         assert exc_info.value.__cause__ is original
+
+
+# ---------------------------------------------------------------------------
+# append_message()
+# ---------------------------------------------------------------------------
+
+
+class TestCosmosThreadStoreAppendMessage:
+    """Tests for CosmosThreadStore.append_message() — FR-002 / T011."""
+
+    def _make_initialized_store(self) -> tuple[CosmosThreadStore, MagicMock]:
+        """Return a store with a mocked CosmosClient and container already set."""
+        mock_client = MagicMock()
+        mock_container = MagicMock()
+        with patch("src.thread_store.DefaultAzureCredential"), patch(
+            "src.thread_store.CosmosClient", return_value=mock_client
+        ):
+            store = CosmosThreadStore(
+                endpoint=_ENDPOINT,
+                database_name=_DATABASE,
+                container_name=_CONTAINER,
+            )
+        store._container = mock_container
+        return store, mock_container
+
+    def _make_raw_doc(
+        self, thread_id: str = "thread-001", user_id: str = "user-001"
+    ) -> dict:
+        """Return a minimal Cosmos DB document dict for a thread."""
+        return {
+            "id": thread_id,
+            "user_id": user_id,
+            "messages": [],
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "updated_at": "2024-01-01T00:00:00+00:00",
+            "metadata": {},
+            "_etag": '"etag-v1"',
+        }
+
+    # ------------------------------------------------------------------
+    # Happy path
+    # ------------------------------------------------------------------
+
+    def test_returns_message_object(self) -> None:
+        """append_message() returns a Message instance."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+
+        result = store.append_message(
+            thread_id="thread-001",
+            user_id="user-001",
+            role="user",
+            content="Hello!",
+        )
+
+        assert isinstance(result, Message)
+
+    def test_returned_message_has_correct_role_and_content(self) -> None:
+        """Returned Message carries the supplied role and content."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+
+        msg = store.append_message(
+            thread_id="thread-001",
+            user_id="user-001",
+            role="assistant",
+            content="Hi there!",
+        )
+
+        assert msg.role == "assistant"
+        assert msg.content == "Hi there!"
+
+    def test_returned_message_has_timestamp(self) -> None:
+        """Returned Message has a non-empty ISO 8601 timestamp."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+
+        msg = store.append_message(
+            thread_id="thread-001",
+            user_id="user-001",
+            role="system",
+            content="System prompt.",
+        )
+
+        assert msg.timestamp  # non-empty string
+
+    def test_read_item_called_with_correct_args(self) -> None:
+        """read_item() is invoked with thread_id and user_id as partition key."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+
+        store.append_message(
+            thread_id="thread-001",
+            user_id="user-001",
+            role="user",
+            content="Ping",
+        )
+
+        mock_container.read_item.assert_called_once_with(
+            item="thread-001", partition_key="user-001"
+        )
+
+    def test_message_appended_to_messages_array(self) -> None:
+        """replace_item() body contains the new message in the messages array."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+
+        store.append_message(
+            thread_id="thread-001",
+            user_id="user-001",
+            role="user",
+            content="Test message",
+        )
+
+        replace_call = mock_container.replace_item.call_args
+        body = replace_call.kwargs["body"]
+        assert len(body["messages"]) == 1
+        assert body["messages"][0]["role"] == "user"
+        assert body["messages"][0]["content"] == "Test message"
+        assert "timestamp" in body["messages"][0]
+
+    def test_updated_at_is_refreshed_in_document(self) -> None:
+        """replace_item() body has updated_at newer than the original value."""
+        store, mock_container = self._make_initialized_store()
+        raw = self._make_raw_doc()
+        original_updated_at = raw["updated_at"]
+        mock_container.read_item.return_value = raw
+
+        store.append_message(
+            thread_id="thread-001",
+            user_id="user-001",
+            role="user",
+            content="Update me",
+        )
+
+        replace_call = mock_container.replace_item.call_args
+        body = replace_call.kwargs["body"]
+        assert body["updated_at"] != original_updated_at
+
+    def test_replace_item_called_with_etag_condition(self) -> None:
+        """replace_item() is called with the document ETag and IfNotModified condition."""
+        from azure.core import MatchConditions
+
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+
+        store.append_message(
+            thread_id="thread-001",
+            user_id="user-001",
+            role="user",
+            content="Concurrency test",
+        )
+
+        replace_call = mock_container.replace_item.call_args
+        assert replace_call.kwargs["etag"] == '"etag-v1"'
+        assert replace_call.kwargs["match_condition"] == MatchConditions.IfNotModified
+
+    def test_all_valid_roles_accepted(self) -> None:
+        """append_message() accepts 'system', 'user', and 'assistant' without error."""
+        store, mock_container = self._make_initialized_store()
+
+        for role in ("system", "user", "assistant"):
+            mock_container.read_item.return_value = self._make_raw_doc()
+            msg = store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role=role,
+                content="Content",
+            )
+            assert msg.role == role
+
+    # ------------------------------------------------------------------
+    # Role validation
+    # ------------------------------------------------------------------
+
+    def test_invalid_role_raises_value_error(self) -> None:
+        """An unrecognised role raises ValueError before any Cosmos DB call."""
+        store, mock_container = self._make_initialized_store()
+
+        with pytest.raises(ValueError, match="Invalid role"):
+            store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role="admin",
+                content="Bad role",
+            )
+
+        mock_container.read_item.assert_not_called()
+
+    def test_value_error_message_contains_valid_roles(self) -> None:
+        """ValueError message lists the accepted role values."""
+        store, _ = self._make_initialized_store()
+
+        with pytest.raises(ValueError) as exc_info:
+            store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role="moderator",
+                content="Bad role",
+            )
+
+        error_msg = str(exc_info.value)
+        assert "assistant" in error_msg
+        assert "system" in error_msg
+        assert "user" in error_msg
+
+    # ------------------------------------------------------------------
+    # ThreadNotFoundError
+    # ------------------------------------------------------------------
+
+    def test_raises_thread_not_found_when_read_item_missing(self) -> None:
+        """CosmosResourceNotFoundError on read → ThreadNotFoundError."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.side_effect = (
+            cosmos_exceptions.CosmosResourceNotFoundError(
+                status_code=404, message="Not found"
+            )
+        )
+
+        with pytest.raises(ThreadNotFoundError, match="thread-001"):
+            store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role="user",
+                content="Hello",
+            )
+
+    def test_thread_not_found_chains_original_exception_on_read(self) -> None:
+        """ThreadNotFoundError raised 'from' the original CosmosResourceNotFoundError."""
+        store, mock_container = self._make_initialized_store()
+        original = cosmos_exceptions.CosmosResourceNotFoundError(
+            status_code=404, message="Not found"
+        )
+        mock_container.read_item.side_effect = original
+
+        with pytest.raises(ThreadNotFoundError) as exc_info:
+            store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role="user",
+                content="Hello",
+            )
+
+        assert exc_info.value.__cause__ is original
+
+    def test_raises_thread_not_found_when_replace_item_missing(self) -> None:
+        """CosmosResourceNotFoundError on replace → ThreadNotFoundError."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+        mock_container.replace_item.side_effect = (
+            cosmos_exceptions.CosmosResourceNotFoundError(
+                status_code=404, message="Not found"
+            )
+        )
+
+        with pytest.raises(ThreadNotFoundError, match="thread-001"):
+            store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role="user",
+                content="Hello",
+            )
+
+    # ------------------------------------------------------------------
+    # StorageConnectionError
+    # ------------------------------------------------------------------
+
+    def test_raises_storage_connection_error_on_read_http_error(self) -> None:
+        """CosmosHttpResponseError on read_item → StorageConnectionError."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.side_effect = (
+            cosmos_exceptions.CosmosHttpResponseError(message="Service unavailable")
+        )
+
+        with pytest.raises(StorageConnectionError, match="thread-001"):
+            store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role="user",
+                content="Hello",
+            )
+
+    def test_raises_storage_connection_error_on_replace_http_error(self) -> None:
+        """CosmosHttpResponseError on replace_item → StorageConnectionError."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+        mock_container.replace_item.side_effect = (
+            cosmos_exceptions.CosmosHttpResponseError(message="Write conflict")
+        )
+
+        with pytest.raises(StorageConnectionError):
+            store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role="user",
+                content="Hello",
+            )
+
+    # ------------------------------------------------------------------
+    # ETag optimistic concurrency / retry
+    # ------------------------------------------------------------------
+
+    def test_retries_on_etag_conflict_and_succeeds(self) -> None:
+        """On a single ETag conflict the method retries and succeeds."""
+        store, mock_container = self._make_initialized_store()
+
+        raw_v1 = self._make_raw_doc()
+        raw_v1["_etag"] = '"etag-v1"'
+        raw_v2 = self._make_raw_doc()
+        raw_v2["_etag"] = '"etag-v2"'
+
+        # First read → conflict; second read → success
+        mock_container.read_item.side_effect = [raw_v1, raw_v2]
+        mock_container.replace_item.side_effect = [
+            cosmos_exceptions.CosmosAccessConditionFailedError(),
+            MagicMock(),  # success on second attempt
+        ]
+
+        result = store.append_message(
+            thread_id="thread-001",
+            user_id="user-001",
+            role="user",
+            content="Retry me",
+        )
+
+        assert isinstance(result, Message)
+        assert mock_container.read_item.call_count == 2
+        assert mock_container.replace_item.call_count == 2
+
+    def test_raises_storage_connection_error_after_max_retries(self) -> None:
+        """StorageConnectionError raised when all retries are exhausted."""
+        store, mock_container = self._make_initialized_store()
+
+        mock_container.read_item.return_value = self._make_raw_doc()
+        mock_container.replace_item.side_effect = (
+            cosmos_exceptions.CosmosAccessConditionFailedError()
+        )
+
+        with pytest.raises(StorageConnectionError, match="ETag conflict"):
+            store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role="user",
+                content="Always conflicts",
+            )
+
+    def test_read_item_called_max_retries_times_on_persistent_conflict(
+        self,
+    ) -> None:
+        """read_item is called _MAX_ETAG_RETRIES times before giving up."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+        mock_container.replace_item.side_effect = (
+            cosmos_exceptions.CosmosAccessConditionFailedError()
+        )
+
+        with pytest.raises(StorageConnectionError):
+            store.append_message(
+                thread_id="thread-001",
+                user_id="user-001",
+                role="user",
+                content="Always conflicts",
+            )
+
+        assert mock_container.read_item.call_count == _MAX_ETAG_RETRIES
+        assert mock_container.replace_item.call_count == _MAX_ETAG_RETRIES
