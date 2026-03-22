@@ -465,7 +465,11 @@ class TestFunctionalRequirements:
         raw = _make_raw_thread(
             thread_id,
             messages=[
-                {"role": "user", "content": "Hi", "timestamp": "2026-03-22T00:00:01+00:00"}
+                {
+                    "role": "user",
+                    "content": "Hi",
+                    "timestamp": "2026-03-22T00:00:01+00:00",
+                }
             ],
             metadata={"source": "test"},
         )
