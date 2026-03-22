@@ -1,4 +1,4 @@
-"""Unit tests for CosmosThreadStore.__init__(), initialize(), create_thread(), and append_message() — T008/T009/T011."""
+"""Unit tests for CosmosThreadStore.__init__(), initialize(), create_thread(), append_message(), and get_messages() — T008/T009/T011/T012."""
 
 from unittest.mock import MagicMock, call, patch
 
@@ -667,3 +667,197 @@ class TestCosmosThreadStoreAppendMessage:
 
         assert mock_container.read_item.call_count == _MAX_ETAG_RETRIES
         assert mock_container.replace_item.call_count == _MAX_ETAG_RETRIES
+
+
+# ---------------------------------------------------------------------------
+# get_messages  (T012)
+# ---------------------------------------------------------------------------
+
+
+class TestCosmosThreadStoreGetMessages:
+    """Tests for CosmosThreadStore.get_messages() — FR-004, FR-007, FR-013 / T012."""
+
+    def _make_initialized_store(self) -> tuple[CosmosThreadStore, MagicMock]:
+        """Return a store with a mocked CosmosClient and container already set."""
+        mock_client = MagicMock()
+        mock_container = MagicMock()
+        with patch("src.thread_store.DefaultAzureCredential"), patch(
+            "src.thread_store.CosmosClient", return_value=mock_client
+        ):
+            store = CosmosThreadStore(
+                endpoint=_ENDPOINT,
+                database_name=_DATABASE,
+                container_name=_CONTAINER,
+            )
+        store._container = mock_container
+        return store, mock_container
+
+    def _make_raw_doc(
+        self,
+        thread_id: str = "thread-001",
+        user_id: str = "user-001",
+        messages: list[dict] | None = None,
+    ) -> dict:
+        """Return a minimal Cosmos DB document dict for a thread."""
+        return {
+            "id": thread_id,
+            "user_id": user_id,
+            "messages": messages or [],
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "updated_at": "2024-01-01T00:00:00+00:00",
+            "metadata": {},
+            "_etag": '"etag-v1"',
+        }
+
+    # ------------------------------------------------------------------
+    # Happy path
+    # ------------------------------------------------------------------
+
+    def test_returns_list_of_message_objects(self) -> None:
+        """get_messages() returns a list of Message instances."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc(
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Hello",
+                    "timestamp": "2024-01-01T00:00:01+00:00",
+                }
+            ]
+        )
+
+        result = store.get_messages(thread_id="thread-001", user_id="user-001")
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], Message)
+
+    def test_returns_empty_list_for_thread_with_no_messages(self) -> None:
+        """get_messages() returns an empty list when the thread has no messages."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc(messages=[])
+
+        result = store.get_messages(thread_id="thread-001", user_id="user-001")
+
+        assert result == []
+
+    def test_returns_all_messages_without_truncation(self) -> None:
+        """FR-007: get_messages() returns the complete message list, not a subset."""
+        store, mock_container = self._make_initialized_store()
+        raw_messages = [
+            {
+                "role": "user",
+                "content": f"Message {i}",
+                "timestamp": f"2024-01-01T00:00:0{i}+00:00",
+            }
+            for i in range(5)
+        ]
+        mock_container.read_item.return_value = self._make_raw_doc(
+            messages=raw_messages
+        )
+
+        result = store.get_messages(thread_id="thread-001", user_id="user-001")
+
+        assert len(result) == 5
+
+    def test_messages_sorted_by_timestamp(self) -> None:
+        """get_messages() returns messages in ascending timestamp (chronological) order."""
+        store, mock_container = self._make_initialized_store()
+        # Provide messages stored out of order
+        mock_container.read_item.return_value = self._make_raw_doc(
+            messages=[
+                {
+                    "role": "assistant",
+                    "content": "Reply",
+                    "timestamp": "2024-01-01T00:00:02+00:00",
+                },
+                {
+                    "role": "user",
+                    "content": "First",
+                    "timestamp": "2024-01-01T00:00:01+00:00",
+                },
+                {
+                    "role": "system",
+                    "content": "System prompt",
+                    "timestamp": "2024-01-01T00:00:00+00:00",
+                },
+            ]
+        )
+
+        result = store.get_messages(thread_id="thread-001", user_id="user-001")
+
+        assert [m.timestamp for m in result] == [
+            "2024-01-01T00:00:00+00:00",
+            "2024-01-01T00:00:01+00:00",
+            "2024-01-01T00:00:02+00:00",
+        ]
+
+    def test_message_fields_preserved(self) -> None:
+        """get_messages() preserves role, content, and timestamp of each message."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc(
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Hello world",
+                    "timestamp": "2024-06-01T12:00:00+00:00",
+                }
+            ]
+        )
+
+        result = store.get_messages(thread_id="thread-001", user_id="user-001")
+
+        assert result[0].role == "user"
+        assert result[0].content == "Hello world"
+        assert result[0].timestamp == "2024-06-01T12:00:00+00:00"
+
+    def test_uses_point_read_with_correct_args(self) -> None:
+        """FR-013: read_item() is called with thread_id and user_id as partition key."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.return_value = self._make_raw_doc()
+
+        store.get_messages(thread_id="thread-001", user_id="user-001")
+
+        mock_container.read_item.assert_called_once_with(
+            item="thread-001", partition_key="user-001"
+        )
+
+    # ------------------------------------------------------------------
+    # Error paths
+    # ------------------------------------------------------------------
+
+    def test_raises_thread_not_found_for_missing_thread(self) -> None:
+        """CosmosResourceNotFoundError on read → ThreadNotFoundError."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.side_effect = (
+            cosmos_exceptions.CosmosResourceNotFoundError(
+                status_code=404, message="Not found"
+            )
+        )
+
+        with pytest.raises(ThreadNotFoundError, match="thread-001"):
+            store.get_messages(thread_id="thread-001", user_id="user-001")
+
+    def test_thread_not_found_chains_original_exception(self) -> None:
+        """ThreadNotFoundError is raised 'from' the original CosmosResourceNotFoundError."""
+        store, mock_container = self._make_initialized_store()
+        original = cosmos_exceptions.CosmosResourceNotFoundError(
+            status_code=404, message="Not found"
+        )
+        mock_container.read_item.side_effect = original
+
+        with pytest.raises(ThreadNotFoundError) as exc_info:
+            store.get_messages(thread_id="thread-001", user_id="user-001")
+
+        assert exc_info.value.__cause__ is original
+
+    def test_raises_storage_connection_error_on_cosmos_http_error(self) -> None:
+        """CosmosHttpResponseError on read_item → StorageConnectionError."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.read_item.side_effect = (
+            cosmos_exceptions.CosmosHttpResponseError(message="Service unavailable")
+        )
+
+        with pytest.raises(StorageConnectionError, match="thread-001"):
+            store.get_messages(thread_id="thread-001", user_id="user-001")
+
