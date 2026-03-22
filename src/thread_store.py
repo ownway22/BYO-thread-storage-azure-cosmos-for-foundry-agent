@@ -230,7 +230,7 @@ class CosmosThreadStore:
             StorageConnectionError: Cosmos DB operation failed.
         """
         thread = self.get_thread(thread_id, user_id)
-        return thread.messages
+        return sorted(thread.messages, key=lambda m: m.timestamp)
 
     # ------------------------------------------------------------------
     # US3: Get thread & list threads
