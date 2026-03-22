@@ -1,4 +1,4 @@
-"""Unit tests for CosmosThreadStore.__init__(), initialize(), create_thread(), append_message(), get_messages(), and get_thread() — T008/T009/T011/T012/T015."""
+"""Unit tests for CosmosThreadStore.__init__(), initialize(), create_thread(), append_message(), get_messages(), get_thread(), and list_threads() — T008/T009/T011/T012/T015/T016."""
 
 from unittest.mock import MagicMock, call, patch
 
@@ -6,7 +6,7 @@ import pytest
 from azure.cosmos import PartitionKey, exceptions as cosmos_exceptions
 
 from src.exceptions import StorageConnectionError, ThreadNotFoundError
-from src.models import Message, Thread
+from src.models import Message, Thread, ThreadSummary
 from src.thread_store import CosmosThreadStore, _MAX_ETAG_RETRIES
 
 
@@ -1056,6 +1056,195 @@ class TestCosmosThreadStoreGetThread:
 
         with pytest.raises(StorageConnectionError) as exc_info:
             store.get_thread(thread_id="thread-001", user_id="user-001")
+
+        assert exc_info.value.__cause__ is original
+
+
+# ---------------------------------------------------------------------------
+# list_threads — T016
+# ---------------------------------------------------------------------------
+
+
+class TestCosmosThreadStoreListThreads:
+    """Tests for CosmosThreadStore.list_threads() — FR-010 / T016."""
+
+    def _make_initialized_store(self) -> tuple[CosmosThreadStore, MagicMock]:
+        """Return a store with a mocked CosmosClient and container already set."""
+        mock_client = MagicMock()
+        mock_container = MagicMock()
+        with patch("src.thread_store.DefaultAzureCredential"), patch(
+            "src.thread_store.CosmosClient", return_value=mock_client
+        ):
+            store = CosmosThreadStore(
+                endpoint=_ENDPOINT,
+                database_name=_DATABASE,
+                container_name=_CONTAINER,
+            )
+        store._container = mock_container
+        return store, mock_container
+
+    def _make_summary_doc(
+        self,
+        thread_id: str = "thread-001",
+        user_id: str = "user-001",
+        created_at: str = "2024-01-01T00:00:00+00:00",
+        updated_at: str = "2024-01-01T00:00:01+00:00",
+        metadata: dict | None = None,
+    ) -> dict:
+        """Return a Cosmos DB projection dict as returned by the SELECT query."""
+        return {
+            "id": thread_id,
+            "user_id": user_id,
+            "created_at": created_at,
+            "updated_at": updated_at,
+            "metadata": metadata if metadata is not None else {},
+        }
+
+    # ------------------------------------------------------------------
+    # Happy path
+    # ------------------------------------------------------------------
+
+    def test_returns_list_of_thread_summaries(self) -> None:
+        """list_threads() returns a list of ThreadSummary instances."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.query_items.return_value = [self._make_summary_doc()]
+
+        result = store.list_threads(user_id="user-001")
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], ThreadSummary)
+
+    def test_empty_list_when_no_threads_exist(self) -> None:
+        """list_threads() returns an empty list when the user has no threads."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.query_items.return_value = []
+
+        result = store.list_threads(user_id="user-001")
+
+        assert result == []
+
+    def test_multiple_threads_returned(self) -> None:
+        """list_threads() returns one ThreadSummary per document."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.query_items.return_value = [
+            self._make_summary_doc(thread_id="thread-001"),
+            self._make_summary_doc(thread_id="thread-002"),
+            self._make_summary_doc(thread_id="thread-003"),
+        ]
+
+        result = store.list_threads(user_id="user-001")
+
+        assert len(result) == 3
+        assert [s.id for s in result] == ["thread-001", "thread-002", "thread-003"]
+
+    def test_summary_fields_populated_correctly(self) -> None:
+        """Each ThreadSummary has id, user_id, created_at, updated_at populated."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.query_items.return_value = [
+            self._make_summary_doc(
+                thread_id="thread-abc",
+                user_id="user-xyz",
+                created_at="2024-06-01T10:00:00+00:00",
+                updated_at="2024-06-01T11:00:00+00:00",
+            )
+        ]
+
+        result = store.list_threads(user_id="user-xyz")
+
+        summary = result[0]
+        assert summary.id == "thread-abc"
+        assert summary.user_id == "user-xyz"
+        assert summary.created_at == "2024-06-01T10:00:00+00:00"
+        assert summary.updated_at == "2024-06-01T11:00:00+00:00"
+
+    def test_metadata_preserved_in_summary(self) -> None:
+        """list_threads() preserves arbitrary metadata in each ThreadSummary."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.query_items.return_value = [
+            self._make_summary_doc(metadata={"title": "My Chat", "agent_id": "agent-42"})
+        ]
+
+        result = store.list_threads(user_id="user-001")
+
+        assert result[0].metadata == {"title": "My Chat", "agent_id": "agent-42"}
+
+    def test_missing_metadata_defaults_to_empty_dict(self) -> None:
+        """list_threads() defaults metadata to {} when the field is absent."""
+        store, mock_container = self._make_initialized_store()
+        doc = self._make_summary_doc()
+        doc.pop("metadata")
+        mock_container.query_items.return_value = [doc]
+
+        result = store.list_threads(user_id="user-001")
+
+        assert result[0].metadata == {}
+
+    def test_query_uses_partition_key(self) -> None:
+        """FR-010: query_items() is called with user_id as partition_key to avoid cross-partition queries."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.query_items.return_value = []
+
+        store.list_threads(user_id="user-001")
+
+        _, kwargs = mock_container.query_items.call_args
+        assert kwargs.get("partition_key") == "user-001"
+
+    def test_query_filters_by_user_id_parameter(self) -> None:
+        """The SQL query passes user_id as a named parameter @user_id."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.query_items.return_value = []
+
+        store.list_threads(user_id="user-001")
+
+        _, kwargs = mock_container.query_items.call_args
+        parameters = kwargs.get("parameters", [])
+        user_id_param = next(
+            (p for p in parameters if p["name"] == "@user_id"), None
+        )
+        assert user_id_param is not None
+        assert user_id_param["value"] == "user-001"
+
+    def test_query_selects_only_summary_fields(self) -> None:
+        """The SQL query projects only summary fields and does not include messages."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.query_items.return_value = []
+
+        store.list_threads(user_id="user-001")
+
+        _, kwargs = mock_container.query_items.call_args
+        query: str = kwargs.get("query", "")
+        assert "messages" not in query.lower()
+        assert "c.id" in query
+        assert "c.user_id" in query
+        assert "c.created_at" in query
+        assert "c.updated_at" in query
+        assert "c.metadata" in query
+
+    # ------------------------------------------------------------------
+    # Error paths
+    # ------------------------------------------------------------------
+
+    def test_raises_storage_connection_error_on_cosmos_http_error(self) -> None:
+        """CosmosHttpResponseError on query_items → StorageConnectionError."""
+        store, mock_container = self._make_initialized_store()
+        mock_container.query_items.side_effect = (
+            cosmos_exceptions.CosmosHttpResponseError(message="Service unavailable")
+        )
+
+        with pytest.raises(StorageConnectionError, match="user-001"):
+            store.list_threads(user_id="user-001")
+
+    def test_storage_connection_error_chains_original_exception(self) -> None:
+        """StorageConnectionError is raised 'from' the original CosmosHttpResponseError."""
+        store, mock_container = self._make_initialized_store()
+        original = cosmos_exceptions.CosmosHttpResponseError(
+            message="Service unavailable"
+        )
+        mock_container.query_items.side_effect = original
+
+        with pytest.raises(StorageConnectionError) as exc_info:
+            store.list_threads(user_id="user-001")
 
         assert exc_info.value.__cause__ is original
 
