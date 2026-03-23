@@ -177,7 +177,7 @@ Agent 端點格式為 `{project_endpoint}/applications/{agent_name}/protocols/op
 
 ---
 
-## 參考資料
+## 六、參考資料
 
 - [BYO Thread Storage in Azure AI Foundry Using Python — Tech Community](https://techcommunity.microsoft.com/discussions/azure-ai-foundry-discussions/byo-thread-storage-in-azure-ai-foundry-using-python/4468147)
 - [Azure AI Foundry Connection for Azure Cosmos DB and BYO Thread Storage — DevBlogs](https://devblogs.microsoft.com/cosmosdb/azure-ai-foundry-connection-for-azure-cosmos-db-and-byo-thread-storage-in-azure-ai-agent-service/)
