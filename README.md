@@ -12,30 +12,6 @@ Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Br
 - 按需刪除執行緒（合規需求）
 - 將對話歷史整合進你的應用邏輯
 
-### 架構概覽
-
-```mermaid
-flowchart TB
-    subgraph chat [對話階段]
-        A["Your App<br/>(interactive_chat.py)"] -->|"① 使用者輸入<br/>② 帶完整歷史呼叫 Responses API"| B["Foundry Agent"]
-        B -->|"③ 回傳 Agent 回覆"| A
-    end
-
-    subgraph save [儲存階段 — 對話結束時]
-        A -->|"④ 建立 thread<br/>⑤ 批次寫入訊息"| C["CosmosThreadStore"]
-        C -->|"azure-cosmos SDK"| D[("Azure Cosmos DB<br/>NoSQL")]
-    end
-
-    subgraph cosmosdb [Cosmos DB 細節]
-        D --- E["threads container<br/>partition key: /user_id"]
-        E --- F["Thread document<br/>id, user_id, messages ..."]
-    end
-
-    subgraph foundry [Foundry 細節]
-        B --- G["project_endpoint<br/>/applications/agent<br/>/protocols/openai"]
-    end
-```
-
 ---
 
 ## 專案結構
@@ -127,7 +103,9 @@ Agent 端點格式為 `{project_endpoint}/applications/{agent_name}/protocols/op
 | Microsoft Foundry project | Agent 對話需要 |
 | Azure 身份驗證 | `az login` 完成，或設定 Managed Identity |
 
-你的 Azure 身份需要 Cosmos DB 帳戶上的 **Cosmos DB Built-in Data Contributor** 角色。
+> **RBAC設定**：你的 Azure 身份需要 Cosmos DB 帳戶上的 **Cosmos DB Built-in Data Contributor** 角色。
+
+> **網路存取**：Cosmos DB 帳戶的 **Networking** 需啟用 **Public network access**，或將你的開發機 IP 加入防火牆白名單，否則連線會被拒絕。
 
 ### 1. 安裝相依套件
 
@@ -179,6 +157,30 @@ uv run interactive-chat
 ![Cosmos DB Data Explorer 中的對話紀錄](images/thread-storage-in-cosmos-db.png)
 
 這證明對話歷史已透過 `CosmosThreadStore` 正確持久化到你自己的 Azure Cosmos DB。你也可以使用 VS Code 的 [Azure Cosmos DB 擴充套件](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-cosmosdb) 進行查詢。
+
+### 5. 架構概覽
+
+```mermaid
+flowchart TB
+    subgraph chat [對話階段]
+        A["Your App<br/>(interactive_chat.py)"] -->|"① 使用者輸入<br/>② 帶完整歷史呼叫 Responses API"| B["Foundry Agent"]
+        B -->|"③ 回傳 Agent 回覆"| A
+    end
+
+    subgraph save [儲存階段 — 對話結束時]
+        A -->|"④ 建立 thread<br/>⑤ 批次寫入訊息"| C["CosmosThreadStore"]
+        C -->|"azure-cosmos SDK"| D[("Azure Cosmos DB<br/>NoSQL")]
+    end
+
+    subgraph cosmosdb [Cosmos DB 細節]
+        D --- E["threads container<br/>partition key: /user_id"]
+        E --- F["Thread document<br/>id, user_id, messages ..."]
+    end
+
+    subgraph foundry [Foundry 細節]
+        B --- G["project_endpoint<br/>/applications/agent<br/>/protocols/openai"]
+    end
+```
 
 ---
 
