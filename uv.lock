@@ -99,7 +99,7 @@ wheels = [
 ]
 
 [[package]]
-name = "byo-thread-storage"
+name = "byo-thread-storage-azure-cosmos-for-foundry-agent"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

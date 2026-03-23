@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "byo-thread-storage"
+name = "byo-thread-storage-azure-cosmos-for-foundry-agent"
 version = "0.1.0"
 description = "BYO Thread Storage — Azure Cosmos DB as conversation thread storage for Microsoft Foundry Agent"
 requires-python = ">=3.11"

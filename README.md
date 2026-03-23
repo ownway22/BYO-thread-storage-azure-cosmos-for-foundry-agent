@@ -40,15 +40,14 @@ Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Br
 
 | 需求 | 說明 |
 |------|------|
+| Microsoft Foundry agent | Agent 對話需要 |
+| Azure Cosmos DB for NoSQL | Serverless 或 ≥ 400 RU/s |
+| Cosmos DB RBAC | 你的 Azure 身份需要帳戶上的 **Cosmos DB Built-in Data Contributor** 角色 |
+| Cosmos DB 網路存取 | 帳戶的 **Networking** 需啟用 **Public network access**，或將開發機 IP 加入防火牆白名單 |
+| Azure CLI | `az login` 完成，或設定 Managed Identity |
+| Clone Repo | `git clone https://github.com/ownway22/BYO-thread-storage-azure-cosmos-for-foundry-agent.git` |
 | Python | ≥ 3.11 |
 | [uv](https://docs.astral.sh/uv/) | Python 套件管理器 |
-| Azure Cosmos DB for NoSQL | Serverless 或 ≥ 400 RU/s |
-| Microsoft Foundry project | Agent 對話需要 |
-| Azure 身份驗證 | `az login` 完成，或設定 Managed Identity |
-
-> **RBAC設定**：你的 Azure 身份需要 Cosmos DB 帳戶上的 **Cosmos DB Built-in Data Contributor** 角色。
-
-> **網路存取**：Cosmos DB 帳戶的 **Networking** 需啟用 **Public network access**，或將你的開發機 IP 加入防火牆白名單，否則連線會被拒絕。
 
 ### 1. 安裝相依套件
 
@@ -64,14 +63,14 @@ uv sync
 cp .env.sample .env
 ```
 
-| 變數 | 必填 | 預設值 | 說明 |
-|------|------|--------|------|
-| `COSMOS_ENDPOINT` | ✅ | — | Cosmos DB endpoint URL |
-| `COSMOS_DATABASE_NAME` | ❌ | `thread_storage` | 資料庫名稱 |
-| `COSMOS_CONTAINER_NAME` | ❌ | `threads` | Container 名稱 |
-| `AZURE_AI_PROJECT_ENDPOINT` | ✅ | — | Foundry project endpoint |
-| `FOUNDRY_AGENT_NAME` | ✅ | — | Foundry Agent 應用名稱（如 `RAI-agent`） |
-| `FOUNDRY_MODEL_NAME` | ✅ | — | Agent 底層模型（如 `gpt-4.1-mini`） |
+| 變數 | 預設值 | 說明 |
+|------|--------|------|
+| `COSMOS_ENDPOINT` | — | Cosmos DB endpoint URL |
+| `COSMOS_DATABASE_NAME` | `thread_storage` | 資料庫名稱 |
+| `COSMOS_CONTAINER_NAME` | `threads` | Container 名稱 |
+| `AZURE_AI_PROJECT_ENDPOINT` | — | Foundry project endpoint |
+| `FOUNDRY_AGENT_NAME` | — | Foundry Agent 應用名稱（如 `RAI-agent`） |
+| `FOUNDRY_MODEL_NAME` | — | Agent 底層模型（如 `gpt-4.1-mini`） |
 
 ### 3. 執行範例
 
