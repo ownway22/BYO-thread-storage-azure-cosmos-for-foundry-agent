@@ -11,12 +11,16 @@ dependencies = [
     "azure-cosmos>=4.7.0",
     "azure-identity",
     "azure-ai-projects",
+    "openai",
     "python-dotenv",
 ]
+
+[project.scripts]
+interactive-chat = "examples.interactive_chat:main"
 
 [tool.black]
 line-length = 88
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*"]
+include = ["src*", "examples*"]

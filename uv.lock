@@ -106,6 +106,7 @@ dependencies = [
     { name = "azure-ai-projects" },
     { name = "azure-cosmos" },
     { name = "azure-identity" },
+    { name = "openai" },
     { name = "python-dotenv" },
 ]
 
@@ -114,6 +115,7 @@ requires-dist = [
     { name = "azure-ai-projects" },
     { name = "azure-cosmos", specifier = ">=4.7.0" },
     { name = "azure-identity" },
+    { name = "openai" },
     { name = "python-dotenv" },
 ]
 

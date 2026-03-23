@@ -1,17 +1,17 @@
-"""Basic usage examples for BYO Thread Storage.
+"""BYO Thread Storage 基本 CRUD 操作範例。
 
-Demonstrates all CRUD operations against Azure Cosmos DB:
-  - create_thread
-  - append_message
-  - get_messages
-  - get_thread
-  - list_threads
-  - delete_thread
+示範對 Azure Cosmos DB 執行所有基本操作：
+  - create_thread   建立對話執行緒
+  - append_message   新增訊息
+  - get_messages     取得訊息列表
+  - get_thread       取得單一執行緒
+  - list_threads     列出使用者所有執行緒
+  - delete_thread    刪除執行緒
 
-Prerequisites:
-  1. Copy .env.sample to .env and set COSMOS_ENDPOINT.
-  2. Ensure your Azure identity has Cosmos DB Data Contributor role.
-  3. Run: pip install -r requirements.txt
+前置準備：
+  1. 複製 .env.sample 為 .env，填入 COSMOS_ENDPOINT。
+  2. 確認你的 Azure 身份具有 Cosmos DB Data Contributor 角色。
+  3. 執行 uv sync 安裝相依套件。
 """
 
 from dotenv import load_dotenv
@@ -22,11 +22,11 @@ from src.thread_store import CosmosThreadStore
 
 
 def main() -> None:
-    """Run CRUD operation examples against Cosmos DB."""
+    """對 Cosmos DB 執行完整 CRUD 操作範例。"""
     load_dotenv()
 
     # ------------------------------------------------------------------
-    # Initialise storage (auto-creates DB and container if absent)
+    # 步驟 1：初始化儲存層（若資料庫或容器不存在會自動建立）
     # ------------------------------------------------------------------
     config = ThreadStoreConfig.from_env()
     store = CosmosThreadStore(
@@ -40,7 +40,7 @@ def main() -> None:
     user_id = "example-user-001"
 
     # ------------------------------------------------------------------
-    # US1: Create a thread
+    # 步驟 2：建立一個新的對話執行緒
     # ------------------------------------------------------------------
     thread = store.create_thread(
         user_id=user_id,
@@ -54,7 +54,7 @@ def main() -> None:
     print(f"  metadata  : {thread.metadata}")
 
     # ------------------------------------------------------------------
-    # US2: Append messages
+    # 步驟 3：新增多筆訊息到執行緒
     # ------------------------------------------------------------------
     store.append_message(thread.id, user_id, "user", "Hello!")
     store.append_message(
@@ -64,14 +64,14 @@ def main() -> None:
     store.append_message(thread.id, user_id, "assistant", "2 + 2 = 4.")
     print(f"\n✓ 4 messages appended to thread {thread.id}")
 
-    # Read back messages
+    # 讀取剛寫入的訊息
     messages = store.get_messages(thread.id, user_id)
     print(f"\n✓ Retrieved {len(messages)} messages:")
     for msg in messages:
         print(f"  [{msg.role:9s}] {msg.content}")
 
     # ------------------------------------------------------------------
-    # US3: Get a specific thread and list all threads
+    # 步驟 4：查詢單一執行緒 & 列出所有執行緒
     # ------------------------------------------------------------------
     fetched = store.get_thread(thread.id, user_id)
     print(f"\n✓ get_thread returned thread {fetched.id}")
@@ -83,7 +83,7 @@ def main() -> None:
     for msg in fetched.messages:
         print(f"    [{msg.role:9s}] {msg.content[:60]}")
 
-    # Create a second thread so list_threads demonstrates multiple results
+    # 建立第二個執行緒，用來示範 list_threads 的多筆結果
     thread2 = store.create_thread(
         user_id=user_id,
         metadata={"title": "Second example thread"},
@@ -99,12 +99,12 @@ def main() -> None:
         print(f"    updated_at : {t.updated_at}")
         print(f"    metadata   : {t.metadata}")
 
-    # Clean up the second thread before proceeding to US4 deletion demo
+    # 清理第二個執行緒，準備進入刪除示範
     store.delete_thread(thread2.id, user_id)
     print(f"\n✓ Second thread {thread2.id} cleaned up")
 
     # ------------------------------------------------------------------
-    # US4: Delete the thread and verify
+    # 步驟 5：刪除執行緒並驗證刪除是否成功
     # ------------------------------------------------------------------
     store.delete_thread(thread.id, user_id)
     print(f"\n✓ Thread {thread.id} deleted")

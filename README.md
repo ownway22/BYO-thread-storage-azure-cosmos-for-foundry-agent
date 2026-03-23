@@ -38,7 +38,8 @@ Your App  ──→  CosmosThreadStore  ──→  Azure Cosmos DB (NoSQL)
 │   └── exceptions.py          # 自定義例外
 ├── examples/
 │   ├── basic_usage.py         # CRUD 操作範例
-│   └── agent_chat.py          # 多輪 Agent 對話範例
+│   ├── agent_chat.py          # 多輪 Agent 對話範例（腳本式）
+│   └── interactive_chat.py    # 互動式 Agent 對話（推薦）
 ├── tests/                     # 單元測試 & 整合測試
 ├── pyproject.toml
 └── requirements.txt
@@ -142,25 +143,53 @@ cp .env.sample .env
 
 ### 3. 執行範例
 
-**CRUD 基本操作**（只需 Cosmos DB）：
+**互動式 Agent 對話**：
 
 ```bash
-uv run python examples/basic_usage.py
+uv run examples/interactive_chat.py
 ```
 
-**多輪 Agent 對話**（Cosmos DB + Foundry Agent）：
+啟動後會進入互動式對話模式，你可以即時與 Foundry Agent 進行多輪對話：
+
+```
+✓ Cosmos DB connection ready
+Enter your user ID (default: interactive-user):
+
+=======================================================
+  Interactive Foundry Agent Chat
+=======================================================
+  Type your message and press Enter.
+  Type 'exit' or 'quit' or press Ctrl+C to end.
+=======================================================
+
+You: 我想規劃一趟日本旅行
+
+Agent: 太好了！日本有很多值得造訪的地方...
+
+You: 推薦京都的景點
+
+Agent: 京都最推薦的景點包括...
+
+You: exit
+
+=======================================================
+  ✓ Conversation saved to Cosmos DB
+=======================================================
+  Thread ID : a1b2c3d4-e5f6-7890-abcd-ef1234567890
+  Messages  : 4
+  User ID   : interactive-user
+=======================================================
+```
+
+結束對話後，所有訊息會一次儲存到 Cosmos DB，並在 terminal 顯示 **Thread ID**。你可以用這個 ID 到 Azure Portal 或 VS Code Cosmos DB 擴充套件查詢該對話紀錄。
+
+也可以透過 console script 啟動：
 
 ```bash
-uv run python examples/agent_chat.py
+uv run interactive-chat
 ```
 
 執行後，對話紀錄會自動寫入 Cosmos DB。你可以在 Azure Portal 或 VS Code Cosmos DB 擴充套件中查看 `threads` container 裡的文件。
-
-### 4. 執行測試
-
-```bash
-uv run pytest tests/unit/ -v
-```
 
 ---
 
