@@ -44,7 +44,7 @@ Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Br
 | Azure Cosmos DB for NoSQL | Serverless 或 ≥ 400 RU/s |
 | Cosmos DB RBAC | 你的 Azure 身份需要帳戶上的 **Cosmos DB Built-in Data Contributor** 角色 |
 | Cosmos DB 網路存取 | 帳戶的 **Networking** 需啟用 **Public network access**，或將開發機 IP 加入防火牆白名單 |
-| Azure CLI | `az login` 完成，或設定 Managed Identity |
+| [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) | `az login` 完成，或設定 Managed Identity |
 | Clone Repo | `git clone https://github.com/ownway22/BYO-thread-storage-azure-cosmos-for-foundry-agent.git` |
 | Python | ≥ 3.11 |
 | [uv](https://docs.astral.sh/uv/) | Python 套件管理器 |
