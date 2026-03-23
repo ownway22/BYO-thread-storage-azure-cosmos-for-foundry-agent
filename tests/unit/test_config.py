@@ -124,6 +124,8 @@ class TestThreadStoreConfigFromEnv:
     ) -> None:
         monkeypatch.setenv("COSMOS_ENDPOINT", "https://env.documents.azure.com:443/")
         monkeypatch.delenv("AZURE_AI_PROJECT_ENDPOINT", raising=False)
+        monkeypatch.delenv("FOUNDRY_AGENT_NAME", raising=False)
+        monkeypatch.setattr("src.config.load_dotenv", lambda: None)
 
         cfg = ThreadStoreConfig.from_env()
 
@@ -151,6 +153,7 @@ class TestThreadStoreConfigFromEnvMissingRequired:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv("COSMOS_ENDPOINT", raising=False)
+        monkeypatch.setattr("src.config.load_dotenv", lambda: None)
 
         with pytest.raises(ValueError, match="COSMOS_ENDPOINT"):
             ThreadStoreConfig.from_env()

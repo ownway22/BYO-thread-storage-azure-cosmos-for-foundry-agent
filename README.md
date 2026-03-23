@@ -1,199 +1,171 @@
 # BYO Thread Storage — Azure Cosmos DB for Foundry Agent
 
-A Python library that provides **Bring Your Own Thread Storage** for Microsoft Foundry Agent, using Azure Cosmos DB for NoSQL as the conversation history backend.
+用 Azure Cosmos DB 儲存 Microsoft Foundry Agent 的對話紀錄，讓你完全掌控對話歷史的查詢、審計與刪除。
 
-## Overview
+---
 
-By default, Foundry Agent manages conversation history internally. This library lets you take ownership of that storage so you can:
+## 專案簡介
 
-- **Query, audit, and archive** conversation threads
-- **Delete** threads on demand (data-retention compliance)
-- **Integrate** conversation history into your own application logic
+Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Bring Your Own (BYO) Thread Storage**，透過 **OpenAI Responses API endpoint** 與 Agent 互動，並將對話執行緒（thread）與訊息（message）持久化到你自己的 Azure Cosmos DB，好處包括：
 
-### Architecture
+- 自由查詢、匯出對話紀錄
+- 按需刪除執行緒（合規需求）
+- 將對話歷史整合進你的應用邏輯
+
+### 架構概覽
 
 ```
-Your App
-  └── CosmosThreadStore
-        └── Azure Cosmos DB for NoSQL
-              └── threads container  (partition key: /user_id)
-                    └── Thread document  { id, user_id, messages[], ... }
+Your App  ──→  CosmosThreadStore  ──→  Azure Cosmos DB (NoSQL)
+                     │                        │
+   agent_integration │               threads container
+   (Responses API)   │               partition key: /user_id
+                     ▼                        │
+            Foundry Agent              Thread document
+  {project_endpoint}/applications/   { id, user_id, messages[], ... }
+    {agent}/protocols/openai
 ```
 
-## Prerequisites
+---
 
-| Requirement | Version |
-|-------------|---------|
+## 專案結構
+
+```
+├── src/
+│   ├── models.py              # 資料模型：Thread、Message dataclass
+│   ├── thread_store.py        # 核心：CosmosThreadStore（所有 Cosmos DB CRUD）
+│   ├── agent_integration.py   # Foundry Agent 整合（對話流程串接）
+│   ├── config.py              # 環境變數設定
+│   └── exceptions.py          # 自定義例外
+├── examples/
+│   ├── basic_usage.py         # CRUD 操作範例
+│   └── agent_chat.py          # 多輪 Agent 對話範例
+├── tests/                     # 單元測試 & 整合測試
+├── pyproject.toml
+└── requirements.txt
+```
+
+---
+
+## Agent × Cosmos DB 整合關鍵
+
+### 資料模型（`src/models.py`）
+
+採用 **嵌入式設計**——訊息直接嵌入在 Thread 文件中，以 `user_id` 做為 partition key：
+
+```python
+@dataclass
+class Thread:
+    user_id: str                    # partition key（高基數）
+    id: str                         # thread UUID
+    messages: list[Message]         # 嵌入的訊息陣列
+    created_at: str
+    updated_at: str
+    metadata: dict[str, Any]
+
+@dataclass
+class Message:
+    role: str       # "user" | "assistant" | "system"
+    content: str
+    timestamp: str
+```
+
+`Thread.to_dict()` / `Thread.from_dict()` 負責與 Cosmos DB 文件格式互轉。
+
+### Cosmos DB CRUD（`src/thread_store.py`）
+
+`CosmosThreadStore` 封裝所有資料庫操作：
+
+| 方法 | 作用 |
+|------|------|
+| `initialize()` | 建立 database / container（若不存在） |
+| `create_thread()` | 建立新對話執行緒 → `container.create_item()` |
+| `append_message()` | **寫入訊息的核心方法**——讀取 thread → 追加 message → `replace_item()` + ETag 樂觀並行控制（最多重試 3 次） |
+| `get_messages()` | 取得某 thread 的完整訊息列表 |
+| `get_thread()` | 以 point read 取得單一 thread |
+| `list_threads()` | 參數化查詢列出使用者所有 thread（不含 messages，節省 RU） |
+| `delete_thread()` | 刪除指定 thread |
+
+**`append_message()` 是最關鍵的方法**，使用 ETag 樂觀並行確保多 client 同時寫入時資料不會遺失。
+
+### 對話流程串接（`src/agent_integration.py`）
+
+`run_agent_conversation()` 把 Cosmos DB 和 Foundry Agent 串在一起：
+
+```
+1. thread_id 為空 → store.create_thread()        # 建立新執行緒
+2. store.append_message("user", user_message)      # 存入使用者訊息
+3. store.get_messages()                             # 取出完整歷史
+4. Responses API → Foundry Agent endpoint          # 帶歷史上下文送給 Agent
+5. store.append_message("assistant", agent_reply)   # 存入 Agent 回覆
+```
+
+Agent 端點格式為 `{project_endpoint}/applications/{agent_name}/protocols/openai`，使用 `openai.OpenAI` 客戶端的 `responses.create()` 方法呼叫。這確保**每一輪對話的使用者訊息和 Agent 回覆都被持久化**，下次對話時可取回完整歷史做為上下文。
+
+---
+
+## 快速開始
+
+### 前置需求
+
+| 需求 | 說明 |
+|------|------|
 | Python | ≥ 3.11 |
-| Azure Cosmos DB for NoSQL | Serverless or ≥ 400 RU/s |
-| Azure AI Foundry project | (only for `agent_integration`) |
-| Azure CLI / Managed Identity | for `DefaultAzureCredential` |
+| [uv](https://docs.astral.sh/uv/) | Python 套件管理器 |
+| Azure Cosmos DB for NoSQL | Serverless 或 ≥ 400 RU/s |
+| Microsoft Foundry project | Agent 對話需要 |
+| Azure 身份驗證 | `az login` 完成，或設定 Managed Identity |
 
-Your Azure identity needs the **Cosmos DB Built-in Data Contributor** role on the Cosmos DB account.
+你的 Azure 身份需要 Cosmos DB 帳戶上的 **Cosmos DB Built-in Data Contributor** 角色。
 
-## Installation
+### 1. 安裝相依套件
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
-`requirements.txt`:
-```
-azure-cosmos>=4.7.0
-azure-identity
-azure-ai-projects
-python-dotenv
-```
+### 2. 設定環境變數
 
-## Environment Variables
-
-Copy `.env.sample` to `.env` and fill in your values:
+複製 `.env.sample` 為 `.env`，填入你的值：
 
 ```bash
 cp .env.sample .env
 ```
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `COSMOS_ENDPOINT` | ✅ | — | Cosmos DB account endpoint URL |
-| `COSMOS_DATABASE_NAME` | ❌ | `thread_storage` | Database name |
-| `COSMOS_CONTAINER_NAME` | ❌ | `threads` | Container name |
-| `AZURE_AI_PROJECT_ENDPOINT` | ✅* | — | Foundry project endpoint |
+| 變數 | 必填 | 預設值 | 說明 |
+|------|------|--------|------|
+| `COSMOS_ENDPOINT` | ✅ | — | Cosmos DB endpoint URL |
+| `COSMOS_DATABASE_NAME` | ❌ | `thread_storage` | 資料庫名稱 |
+| `COSMOS_CONTAINER_NAME` | ❌ | `threads` | Container 名稱 |
+| `AZURE_AI_PROJECT_ENDPOINT` | ✅ | — | Foundry project endpoint |
+| `FOUNDRY_AGENT_NAME` | ✅ | — | Foundry Agent 應用名稱（如 `RAI-agent`） |
+| `FOUNDRY_MODEL_NAME` | ✅ | — | Agent 底層模型（如 `gpt-4.1-mini`） |
 
-*Required only when using `agent_integration`.
+### 3. 執行範例
 
-## Basic Usage
-
-```python
-from dotenv import load_dotenv
-from src.config import ThreadStoreConfig
-from src.thread_store import CosmosThreadStore
-
-load_dotenv()
-
-# Initialise (auto-creates database and container if absent)
-config = ThreadStoreConfig.from_env()
-store = CosmosThreadStore(
-    endpoint=config.cosmos_endpoint,
-    database_name=config.cosmos_database_name,
-    container_name=config.cosmos_container_name,
-)
-store.initialize()
-
-# Create a thread
-thread = store.create_thread(user_id="user-001")
-print(f"Thread created: {thread.id}")
-
-# Append messages
-store.append_message(thread.id, "user-001", "user", "Hello!")
-store.append_message(thread.id, "user-001", "assistant", "Hi! How can I help?")
-
-# Retrieve full history
-messages = store.get_messages(thread.id, "user-001")
-for msg in messages:
-    print(f"[{msg.role}] {msg.content}")
-
-# List all threads for a user
-threads = store.list_threads("user-001")
-for t in threads:
-    print(f"Thread {t.id} — updated: {t.updated_at}")
-
-# Delete a thread
-store.delete_thread(thread.id, "user-001")
-```
-
-## Foundry Agent Integration
-
-```python
-from dotenv import load_dotenv
-from src.config import ThreadStoreConfig
-from src.thread_store import CosmosThreadStore
-from src.agent_integration import run_agent_conversation
-
-load_dotenv()
-
-config = ThreadStoreConfig.from_env()
-store = CosmosThreadStore(
-    endpoint=config.cosmos_endpoint,
-    database_name=config.cosmos_database_name,
-    container_name=config.cosmos_container_name,
-)
-store.initialize()
-
-# Turn 1 — new conversation
-reply, thread_id = run_agent_conversation(
-    store=store,
-    user_id="user-001",
-    user_message="I want to plan a trip to Japan.",
-)
-print(f"Agent: {reply}")
-
-# Turn 2 — continue conversation (agent recalls previous context)
-reply, _ = run_agent_conversation(
-    store=store,
-    user_id="user-001",
-    user_message="I prefer Kyoto. Any recommendations?",
-    thread_id=thread_id,
-)
-print(f"Agent: {reply}")
-```
-
-## Running the Examples
+**CRUD 基本操作**（只需 Cosmos DB）：
 
 ```bash
-# Basic CRUD operations
-python examples/basic_usage.py
-
-# Multi-turn Agent conversation
-python examples/agent_chat.py
+uv run python examples/basic_usage.py
 ```
 
-## File Structure
+**多輪 Agent 對話**（Cosmos DB + Foundry Agent）：
 
-```
-├── src/
-│   ├── __init__.py          # Public API exports
-│   ├── models.py            # Thread, Message, ThreadSummary dataclasses
-│   ├── exceptions.py        # ThreadStorageError hierarchy
-│   ├── config.py            # ThreadStoreConfig + from_env()
-│   ├── thread_store.py      # CosmosThreadStore core class
-│   └── agent_integration.py # run_agent_conversation() Foundry integration
-├── examples/
-│   ├── basic_usage.py       # CRUD operation demo
-│   └── agent_chat.py        # Multi-turn conversation demo
-├── tests/
-│   ├── unit/                # Unit tests
-│   ├── integration/         # Integration tests
-│   └── contract/            # Contract tests
-├── specs/
-│   └── 001-byo-thread-storage/  # Feature specs, plan, data model, contracts
-├── .env.sample              # Environment variable template
-├── requirements.txt         # Python dependencies
-└── pyproject.toml           # Project configuration
+```bash
+uv run python examples/agent_chat.py
 ```
 
-## Error Handling
+執行後，對話紀錄會自動寫入 Cosmos DB。你可以在 Azure Portal 或 VS Code Cosmos DB 擴充套件中查看 `threads` container 裡的文件。
 
-| Exception | When raised |
-|-----------|-------------|
-| `ThreadNotFoundError` | Thread does not exist or belongs to a different user |
-| `StorageConnectionError` | Cosmos DB connection or operation failure |
-| `AccessDeniedError` | Reserved for future RBAC expansion |
-| `ValueError` | Invalid `role` value passed to `append_message` |
+### 4. 執行測試
 
-```python
-from src.exceptions import ThreadNotFoundError, StorageConnectionError
-
-try:
-    thread = store.get_thread("non-existent-id", "user-001")
-except ThreadNotFoundError as e:
-    print(f"Thread not found: {e}")
-except StorageConnectionError as e:
-    print(f"Storage error: {e}")
+```bash
+uv run pytest tests/unit/ -v
 ```
 
-## Security
+---
 
-- All authentication uses **`DefaultAzureCredential`** — no API keys in code.
-- User data isolation is enforced via the **`/user_id` partition key**: a user can only read, update, or delete their own threads.
-- Never commit `.env` files; use `.env.sample` as a template.
+## 參考資料
+
+- [BYO Thread Storage in Azure AI Foundry Using Python — Tech Community](https://techcommunity.microsoft.com/discussions/azure-ai-foundry-discussions/byo-thread-storage-in-azure-ai-foundry-using-python/4468147)
+- [Azure AI Foundry Connection for Azure Cosmos DB and BYO Thread Storage — DevBlogs](https://devblogs.microsoft.com/cosmosdb/azure-ai-foundry-connection-for-azure-cosmos-db-and-byo-thread-storage-in-azure-ai-agent-service/)
+- [Azure Cosmos DB for Azure Agent Service — Microsoft Learn](https://learn.microsoft.com/en-us/azure/cosmos-db/gen-ai/azure-agent-service)

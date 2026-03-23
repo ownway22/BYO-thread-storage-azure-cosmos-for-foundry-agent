@@ -4,8 +4,8 @@ Demonstrates how conversation context is preserved across multiple turns
 by persisting messages in Azure Cosmos DB (US2, FR-006, FR-007).
 
 Prerequisites:
-  1. Copy .env.sample to .env and set COSMOS_ENDPOINT and
-     AZURE_AI_PROJECT_ENDPOINT.
+  1. Copy .env.sample to .env and set COSMOS_ENDPOINT,
+     AZURE_AI_PROJECT_ENDPOINT, FOUNDRY_AGENT_NAME, and FOUNDRY_MODEL_NAME.
   2. Ensure your Azure identity has the required roles on both Cosmos DB
      and Azure AI Foundry.
   3. Run: pip install -r requirements.txt
@@ -46,6 +46,8 @@ def main() -> None:
         store=store,
         user_id=user_id,
         user_message=user_msg_1,
+        agent_name=config.foundry_agent_name,
+        model_name=config.foundry_model_name,
     )
     print(f"[Agent] {reply_1}")
     print(f"\n  Thread ID: {thread_id}")
@@ -61,6 +63,8 @@ def main() -> None:
         user_id=user_id,
         user_message=user_msg_2,
         thread_id=thread_id,
+        agent_name=config.foundry_agent_name,
+        model_name=config.foundry_model_name,
     )
     print(f"[Agent] {reply_2}")
 
@@ -72,9 +76,9 @@ def main() -> None:
     for msg in messages:
         print(f"  [{msg.role:9s}] {msg.content[:80]}")
 
-    # Cleanup (optional)
-    store.delete_thread(thread_id, user_id)
-    print(f"\n✓ Thread {thread_id} cleaned up")
+    # Cleanup (optional) — commented out to preserve threads in Cosmos DB
+    # store.delete_thread(thread_id, user_id)
+    # print(f"\n✓ Thread {thread_id} cleaned up")
 
 
 if __name__ == "__main__":

@@ -528,33 +528,22 @@ class TestFunctionalRequirements:
             Message(role="user", content=user_msg),
         ]
 
-        # Build mock Foundry client
-        text_part = MagicMock()
-        text_part.text.value = agent_reply
-        assistant_msg = MagicMock()
-        assistant_msg.role = "assistant"
-        assistant_msg.content = [text_part]
-        response = MagicMock()
-        response.data = [assistant_msg]
+        # Build mock OpenAI client (Responses API)
+        mock_response = MagicMock()
+        mock_response.output_text = agent_reply
+        openai_client = MagicMock()
+        openai_client.responses.create.return_value = mock_response
 
-        mock_agent = MagicMock()
-        mock_agent.id = "agent-001"
-        agents_client = MagicMock()
-        agents_client.list_agents.return_value = [mock_agent]
-        foundry_thread = MagicMock()
-        foundry_thread.id = "foundry-001"
-        agents_client.create_thread.return_value = foundry_thread
-        agents_client.list_messages.return_value = response
-        project_client = MagicMock()
-        project_client.__enter__ = MagicMock(return_value=project_client)
-        project_client.__exit__ = MagicMock(return_value=False)
-        project_client.agents = agents_client
+        env = {
+            "AZURE_AI_PROJECT_ENDPOINT": "https://project.api.azureml.ms",
+            "FOUNDRY_AGENT_NAME": "test-agent",
+            "FOUNDRY_MODEL_NAME": "gpt-4.1-mini",
+        }
 
         with patch(
-            "src.agent_integration.AIProjectClient", return_value=project_client
+            "src.agent_integration.openai.OpenAI", return_value=openai_client
         ), patch("src.agent_integration.DefaultAzureCredential"), patch.dict(
-            os.environ,
-            {"AZURE_AI_PROJECT_ENDPOINT": "https://project.api.azureml.ms"},
+            os.environ, env, clear=True,
         ):
             from src.agent_integration import run_agent_conversation
 
@@ -751,7 +740,9 @@ class TestFunctionalRequirements:
 
     def test_fr012_missing_cosmos_endpoint_raises_value_error(self) -> None:
         """FR-012: Missing COSMOS_ENDPOINT raises ValueError with a clear message."""
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {}, clear=True), patch(
+            "src.config.load_dotenv"
+        ):
             with pytest.raises(ValueError, match="COSMOS_ENDPOINT"):
                 ThreadStoreConfig.from_env()
 
@@ -999,33 +990,22 @@ class TestSuccessCriteria:
             Message(role="user", content="test")
         ]
 
-        text_part = MagicMock()
-        text_part.text.value = "reply"
-        assistant_msg = MagicMock()
-        assistant_msg.role = "assistant"
-        assistant_msg.content = [text_part]
-        response = MagicMock()
-        response.data = [assistant_msg]
-        mock_agent = MagicMock()
-        mock_agent.id = "agent-001"
-        agents_client = MagicMock()
-        agents_client.list_agents.return_value = [mock_agent]
-        foundry_thread = MagicMock()
-        foundry_thread.id = "foundry-001"
-        agents_client.create_thread.return_value = foundry_thread
-        agents_client.list_messages.return_value = response
-        project_client = MagicMock()
-        project_client.__enter__ = MagicMock(return_value=project_client)
-        project_client.__exit__ = MagicMock(return_value=False)
-        project_client.agents = agents_client
+        mock_response = MagicMock()
+        mock_response.output_text = "reply"
+        openai_client = MagicMock()
+        openai_client.responses.create.return_value = mock_response
 
         with patch(
-            "src.agent_integration.AIProjectClient", return_value=project_client
-        ) as mock_ai_client, patch(
+            "src.agent_integration.openai.OpenAI", return_value=openai_client
+        ) as mock_openai_cls, patch(
             "src.agent_integration.DefaultAzureCredential"
         ) as mock_dac_cls, patch.dict(
             os.environ,
-            {"AZURE_AI_PROJECT_ENDPOINT": "https://project.api.azureml.ms"},
+            {
+                "AZURE_AI_PROJECT_ENDPOINT": "https://project.api.azureml.ms",
+                "FOUNDRY_AGENT_NAME": "test-agent",
+                "FOUNDRY_MODEL_NAME": "gpt-4.1-mini",
+            },
         ):
             from src.agent_integration import run_agent_conversation
 
@@ -1036,6 +1016,6 @@ class TestSuccessCriteria:
             )
 
             mock_dac_cls.assert_called_once()
-            mock_ai_client.assert_called_once()
-            _, kwargs = mock_ai_client.call_args
-            assert "credential" in kwargs
+            mock_openai_cls.assert_called_once()
+            _, kwargs = mock_openai_cls.call_args
+            assert "api_key" in kwargs
