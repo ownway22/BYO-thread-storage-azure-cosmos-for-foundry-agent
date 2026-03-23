@@ -34,63 +34,6 @@ Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Br
 
 ---
 
-## Agent × Cosmos DB 整合關鍵
-
-### 資料模型（`src/models.py`）
-
-採用 **嵌入式設計**——訊息直接嵌入在 Thread 文件中，以 `user_id` 做為 partition key：
-
-```python
-@dataclass
-class Thread:
-    user_id: str                    # partition key（高基數）
-    id: str                         # thread UUID
-    messages: list[Message]         # 嵌入的訊息陣列
-    created_at: str
-    updated_at: str
-    metadata: dict[str, Any]
-
-@dataclass
-class Message:
-    role: str       # "user" | "assistant" | "system"
-    content: str
-    timestamp: str
-```
-
-`Thread.to_dict()` / `Thread.from_dict()` 負責與 Cosmos DB 文件格式互轉。
-
-### Cosmos DB CRUD（`src/thread_store.py`）
-
-`CosmosThreadStore` 封裝所有資料庫操作：
-
-| 方法 | 作用 |
-|------|------|
-| `initialize()` | 建立 database / container（若不存在） |
-| `create_thread()` | 建立新對話執行緒 → `container.create_item()` |
-| `append_message()` | **寫入訊息的核心方法**——讀取 thread → 追加 message → `replace_item()` + ETag 樂觀並行控制（最多重試 3 次） |
-| `get_messages()` | 取得某 thread 的完整訊息列表 |
-| `get_thread()` | 以 point read 取得單一 thread |
-| `list_threads()` | 參數化查詢列出使用者所有 thread（不含 messages，節省 RU） |
-| `delete_thread()` | 刪除指定 thread |
-
-**`append_message()` 是最關鍵的方法**，使用 ETag 樂觀並行確保多 client 同時寫入時資料不會遺失。
-
-### 對話流程串接（`src/agent_integration.py`）
-
-`run_agent_conversation()` 把 Cosmos DB 和 Foundry Agent 串在一起：
-
-```
-1. thread_id 為空 → store.create_thread()        # 建立新執行緒
-2. store.append_message("user", user_message)      # 存入使用者訊息
-3. store.get_messages()                             # 取出完整歷史
-4. Responses API → Foundry Agent endpoint          # 帶歷史上下文送給 Agent
-5. store.append_message("assistant", agent_reply)   # 存入 Agent 回覆
-```
-
-Agent 端點格式為 `{project_endpoint}/applications/{agent_name}/protocols/openai`，使用 `openai.OpenAI` 客戶端的 `responses.create()` 方法呼叫。這確保**每一輪對話的使用者訊息和 Agent 回覆都被持久化**，下次對話時可取回完整歷史做為上下文。
-
----
-
 ## 快速開始
 
 ### 前置需求
@@ -181,6 +124,63 @@ flowchart TB
         B --- G["project_endpoint<br/>/applications/agent<br/>/protocols/openai"]
     end
 ```
+
+---
+
+## Agent × Cosmos DB 整合關鍵
+
+### 資料模型（`src/models.py`）
+
+採用 **嵌入式設計**——訊息直接嵌入在 Thread 文件中，以 `user_id` 做為 partition key：
+
+```python
+@dataclass
+class Thread:
+    user_id: str                    # partition key（高基數）
+    id: str                         # thread UUID
+    messages: list[Message]         # 嵌入的訊息陣列
+    created_at: str
+    updated_at: str
+    metadata: dict[str, Any]
+
+@dataclass
+class Message:
+    role: str       # "user" | "assistant" | "system"
+    content: str
+    timestamp: str
+```
+
+`Thread.to_dict()` / `Thread.from_dict()` 負責與 Cosmos DB 文件格式互轉。
+
+### Cosmos DB CRUD（`src/thread_store.py`）
+
+`CosmosThreadStore` 封裝所有資料庫操作：
+
+| 方法 | 作用 |
+|------|------|
+| `initialize()` | 建立 database / container（若不存在） |
+| `create_thread()` | 建立新對話執行緒 → `container.create_item()` |
+| `append_message()` | **寫入訊息的核心方法**——讀取 thread → 追加 message → `replace_item()` + ETag 樂觀並行控制（最多重試 3 次） |
+| `get_messages()` | 取得某 thread 的完整訊息列表 |
+| `get_thread()` | 以 point read 取得單一 thread |
+| `list_threads()` | 參數化查詢列出使用者所有 thread（不含 messages，節省 RU） |
+| `delete_thread()` | 刪除指定 thread |
+
+**`append_message()` 是最關鍵的方法**，使用 ETag 樂觀並行確保多 client 同時寫入時資料不會遺失。
+
+### 對話流程串接（`src/agent_integration.py`）
+
+`run_agent_conversation()` 把 Cosmos DB 和 Foundry Agent 串在一起：
+
+```
+1. thread_id 為空 → store.create_thread()        # 建立新執行緒
+2. store.append_message("user", user_message)      # 存入使用者訊息
+3. store.get_messages()                             # 取出完整歷史
+4. Responses API → Foundry Agent endpoint          # 帶歷史上下文送給 Agent
+5. store.append_message("assistant", agent_reply)   # 存入 Agent 回覆
+```
+
+Agent 端點格式為 `{project_endpoint}/applications/{agent_name}/protocols/openai`，使用 `openai.OpenAI` 客戶端的 `responses.create()` 方法呼叫。這確保**每一輪對話的使用者訊息和 Agent 回覆都被持久化**，下次對話時可取回完整歷史做為上下文。
 
 ---
 
