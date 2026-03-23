@@ -1,6 +1,6 @@
 # BYO Thread Storage — Azure Cosmos DB for Foundry Agent
 
-用 Azure Cosmos DB 儲存 Microsoft Foundry Agent 的對話紀錄，讓你完全掌控對話歷史的查詢、審計與刪除。
+用 Azure Cosmos DB 儲存 Microsoft Foundry Agent 的對話紀錄，讓你完全掌控對話歷史的查詢、稽核與刪除。
 
 ---
 
