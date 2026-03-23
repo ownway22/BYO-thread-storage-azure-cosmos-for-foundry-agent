@@ -88,7 +88,7 @@ uv run examples/interactive_chat.py
 
 ### 5. 驗證對話紀錄
 
-執行完成後，你可以到 **Azure Portal** 的 Cosmos DB 帳戶，開啟 **Data Explorer**，在 `threads` container 中以 Thread ID `adbf6bb7-fbd7-4b26-b9d3-112fb7a8217b` 查詢，即可看到完整的對話紀錄已成功寫入：
+執行完成後，你可以到 **Azure Portal** 的 Cosmos DB 帳戶，開啟 **Data Explorer**，在 `threads` container 中以 Thread ID 查詢，即可看到完整的對話紀錄已成功寫入（如上圖中的 `adbf6bb7-fbd7-4b26-b9d3-112fb7a8217b`）：
 
 ![Cosmos DB Data Explorer 中的對話紀錄](images/thread-storage-in-cosmos-db.png)
 
