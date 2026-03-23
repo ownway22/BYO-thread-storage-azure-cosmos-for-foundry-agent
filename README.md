@@ -4,7 +4,7 @@
 
 ---
 
-## 專案簡介
+## 一、專案簡介
 
 Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Bring Your Own (BYO) Thread Storage**，透過 **OpenAI Responses API endpoint** 與 Agent 互動，並將對話執行緒（thread）與訊息（message）持久化到你自己的 Azure Cosmos DB，好處包括：
 
@@ -14,7 +14,7 @@ Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Br
 
 ---
 
-## 專案結構
+## 二、專案結構
 
 ```
 ├── src/
@@ -34,9 +34,9 @@ Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Br
 
 ---
 
-## 快速開始
+## 三、快速開始
 
-### 前置需求
+### 1. 前置需求
 
 | 需求 | 說明 |
 |------|------|
@@ -49,13 +49,13 @@ Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Br
 | Python | ≥ 3.11 |
 | [uv](https://docs.astral.sh/uv/) | Python 套件管理器 |
 
-### 1. 安裝相依套件
+### 2. 安裝相依套件
 
 ```bash
 uv sync
 ```
 
-### 2. 設定環境變數
+### 3. 設定環境變數
 
 複製 `.env.sample` 為 `.env`，填入你的值：
 
@@ -72,7 +72,7 @@ cp .env.sample .env
 | `FOUNDRY_AGENT_NAME` | — | Foundry Agent 應用名稱（如 `RAI-agent`） |
 | `FOUNDRY_MODEL_NAME` | — | Agent 底層模型（如 `gpt-4.1-mini`） |
 
-### 3. 執行範例
+### 4. 執行範例
 
 **互動式 Agent 對話**：
 
@@ -86,7 +86,7 @@ uv run examples/interactive_chat.py
 
 結束對話後，所有訊息會一次儲存到 Cosmos DB，並在 terminal 顯示 **Thread ID**（如上圖中的 `adbf6bb7-fbd7-4b26-b9d3-112fb7a8217b`）。
 
-### 4. 驗證對話紀錄
+### 5. 驗證對話紀錄
 
 執行完成後，你可以到 **Azure Portal** 的 Cosmos DB 帳戶，開啟 **Data Explorer**，在 `threads` container 中以 Thread ID `adbf6bb7-fbd7-4b26-b9d3-112fb7a8217b` 查詢，即可看到完整的對話紀錄已成功寫入：
 
@@ -94,7 +94,7 @@ uv run examples/interactive_chat.py
 
 這證明對話歷史已透過 `CosmosThreadStore` 正確持久化到你自己的 Azure Cosmos DB。
 
-### 5. 架構概覽
+## 四、架構概覽
 
 ```mermaid
 flowchart TB
@@ -120,7 +120,7 @@ flowchart TB
 
 ---
 
-## Agent × Cosmos DB 整合關鍵
+## 五、Agent × Cosmos DB 整合關鍵
 
 ### 1. 資料模型（`src/models.py`）
 
