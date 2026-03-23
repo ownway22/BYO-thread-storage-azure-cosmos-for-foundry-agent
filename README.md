@@ -86,19 +86,13 @@ uv run examples/interactive_chat.py
 
 結束對話後，所有訊息會一次儲存到 Cosmos DB，並在 terminal 顯示 **Thread ID**（如上圖中的 `adbf6bb7-fbd7-4b26-b9d3-112fb7a8217b`）。
 
-也可以透過 console script 啟動：
-
-```bash
-uv run interactive-chat
-```
-
 ### 4. 驗證對話紀錄
 
 執行完成後，你可以到 **Azure Portal** 的 Cosmos DB 帳戶，開啟 **Data Explorer**，在 `threads` container 中以 Thread ID `adbf6bb7-fbd7-4b26-b9d3-112fb7a8217b` 查詢，即可看到完整的對話紀錄已成功寫入：
 
 ![Cosmos DB Data Explorer 中的對話紀錄](images/thread-storage-in-cosmos-db.png)
 
-這證明對話歷史已透過 `CosmosThreadStore` 正確持久化到你自己的 Azure Cosmos DB。你也可以使用 VS Code 的 [Azure Cosmos DB 擴充套件](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-cosmosdb) 進行查詢。
+這證明對話歷史已透過 `CosmosThreadStore` 正確持久化到你自己的 Azure Cosmos DB。
 
 ### 5. 架構概覽
 
@@ -128,7 +122,7 @@ flowchart TB
 
 ## Agent × Cosmos DB 整合關鍵
 
-### 資料模型（`src/models.py`）
+### 1. 資料模型（`src/models.py`）
 
 採用 **嵌入式設計**——訊息直接嵌入在 Thread 文件中，以 `user_id` 做為 partition key：
 
@@ -151,7 +145,7 @@ class Message:
 
 `Thread.to_dict()` / `Thread.from_dict()` 負責與 Cosmos DB 文件格式互轉。
 
-### Cosmos DB CRUD（`src/thread_store.py`）
+### 2. Cosmos DB CRUD（`src/thread_store.py`）
 
 `CosmosThreadStore` 封裝所有資料庫操作：
 
@@ -167,7 +161,7 @@ class Message:
 
 **`append_message()` 是最關鍵的方法**，使用 ETag 樂觀並行確保多 client 同時寫入時資料不會遺失。
 
-### 對話流程串接（`src/agent_integration.py`）
+### 3. 對話流程串接（`src/agent_integration.py`）
 
 `run_agent_conversation()` 把 Cosmos DB 和 Foundry Agent 串在一起：
 
