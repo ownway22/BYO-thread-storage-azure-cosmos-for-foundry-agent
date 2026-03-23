@@ -14,15 +14,26 @@ Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Br
 
 ### 架構概覽
 
-```
-Your App  ──→  CosmosThreadStore  ──→  Azure Cosmos DB (NoSQL)
-                     │                        │
-   agent_integration │               threads container
-   (Responses API)   │               partition key: /user_id
-                     ▼                        │
-            Foundry Agent              Thread document
-  {project_endpoint}/applications/   { id, user_id, messages[], ... }
-    {agent}/protocols/openai
+```mermaid
+flowchart TB
+    subgraph chat [對話階段]
+        A["Your App<br/>(interactive_chat.py)"] -->|"① 使用者輸入<br/>② 帶完整歷史呼叫 Responses API"| B["Foundry Agent"]
+        B -->|"③ 回傳 Agent 回覆"| A
+    end
+
+    subgraph save [儲存階段 — 對話結束時]
+        A -->|"④ 建立 thread<br/>⑤ 批次寫入訊息"| C["CosmosThreadStore"]
+        C -->|"azure-cosmos SDK"| D[("Azure Cosmos DB<br/>NoSQL")]
+    end
+
+    subgraph cosmosdb [Cosmos DB 細節]
+        D --- E["threads container<br/>partition key: /user_id"]
+        E --- F["Thread document<br/>id, user_id, messages ..."]
+    end
+
+    subgraph foundry [Foundry 細節]
+        B --- G["project_endpoint<br/>/applications/agent<br/>/protocols/openai"]
+    end
 ```
 
 ---
@@ -149,39 +160,11 @@ cp .env.sample .env
 uv run examples/interactive_chat.py
 ```
 
-啟動後會進入互動式對話模式，你可以即時與 Foundry Agent 進行多輪對話：
+啟動後會進入互動式對話模式，你可以即時與 Foundry Agent 進行多輪對話。以下是執行成功的範例畫面：
 
-```
-✓ Cosmos DB connection ready
-Enter your user ID (default: interactive-user):
+![互動式 Agent 對話範例](images/chat-with-foundry-agent.png)
 
-=======================================================
-  Interactive Foundry Agent Chat
-=======================================================
-  Type your message and press Enter.
-  Type 'exit' or 'quit' or press Ctrl+C to end.
-=======================================================
-
-You: 我想規劃一趟日本旅行
-
-Agent: 太好了！日本有很多值得造訪的地方...
-
-You: 推薦京都的景點
-
-Agent: 京都最推薦的景點包括...
-
-You: exit
-
-=======================================================
-  ✓ Conversation saved to Cosmos DB
-=======================================================
-  Thread ID : a1b2c3d4-e5f6-7890-abcd-ef1234567890
-  Messages  : 4
-  User ID   : interactive-user
-=======================================================
-```
-
-結束對話後，所有訊息會一次儲存到 Cosmos DB，並在 terminal 顯示 **Thread ID**。你可以用這個 ID 到 Azure Portal 或 VS Code Cosmos DB 擴充套件查詢該對話紀錄。
+結束對話後，所有訊息會一次儲存到 Cosmos DB，並在 terminal 顯示 **Thread ID**（如上圖中的 `adbf6bb7-fbd7-4b26-b9d3-112fb7a8217b`）。
 
 也可以透過 console script 啟動：
 
@@ -189,7 +172,13 @@ You: exit
 uv run interactive-chat
 ```
 
-執行後，對話紀錄會自動寫入 Cosmos DB。你可以在 Azure Portal 或 VS Code Cosmos DB 擴充套件中查看 `threads` container 裡的文件。
+### 4. 驗證對話紀錄
+
+執行完成後，你可以到 **Azure Portal** 的 Cosmos DB 帳戶，開啟 **Data Explorer**，在 `threads` container 中以 Thread ID `adbf6bb7-fbd7-4b26-b9d3-112fb7a8217b` 查詢，即可看到完整的對話紀錄已成功寫入：
+
+![Cosmos DB Data Explorer 中的對話紀錄](images/thread-storage-in-cosmos-db.png)
+
+這證明對話歷史已透過 `CosmosThreadStore` 正確持久化到你自己的 Azure Cosmos DB。你也可以使用 VS Code 的 [Azure Cosmos DB 擴充套件](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-cosmosdb) 進行查詢。
 
 ---
 
