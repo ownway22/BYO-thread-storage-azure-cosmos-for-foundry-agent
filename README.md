@@ -42,12 +42,79 @@ Microsoft Foundry Agent 預設在內部管理對話歷史。本專案實作 **Br
 |------|------|
 | Microsoft Foundry agent | Agent 對話需要 |
 | Azure Cosmos DB for NoSQL | Serverless 或 ≥ 400 RU/s |
-| Cosmos DB RBAC | 你的 Azure 身份需要帳戶上的 **Cosmos DB Built-in Data Contributor** 角色 |
+| Cosmos DB RBAC | 你的 Azure 身份需要帳戶上的 **Cosmos DB Built-in Data Contributor** 角色（見下方 §1.5） |
 | Cosmos DB 網路存取 | 帳戶的 **Networking** 需啟用 **Public network access**，或將開發機 IP 加入防火牆白名單 |
 | [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) | `az login` 完成，或設定 Managed Identity |
 | Clone Repo | `git clone https://github.com/ownway22/BYO-thread-storage-azure-cosmos-for-foundry-agent.git` |
 | Python | ≥ 3.11 |
 | [uv](https://docs.astral.sh/uv/) | Python 套件管理器 |
+
+> ⚠️ **特別注意**：即使你的 Azure 身份是 Subscription **Owner / Contributor**，預設**仍無法**讀寫 Cosmos DB 內的資料。原因是 Cosmos DB 有「兩套」獨立的 RBAC 系統（見下方 §1.5）。沒有先指派 Data Plane 角色就執行範例，會看到類似下面的錯誤：
+>
+> ```
+> azure.cosmos.exceptions.CosmosHttpResponseError: (Forbidden)
+> Request is blocked because principal [<your-principal-id>] does not have
+> required RBAC permissions to perform action
+> [Microsoft.DocumentDB/databaseAccounts/readMetadata] on resource [/].
+> ```
+
+### 1.5 指派 Cosmos DB Data Plane 角色（必要步驟）
+
+**為什麼需要這一步？** Azure Cosmos DB 有「兩套」獨立的 RBAC 系統，它們互不相通：
+
+| RBAC 類型 | 控制範圍 | 範例角色 | 在哪指派 |
+|----------|---------|---------|---------|
+| **Azure Control Plane RBAC**（管理層） | 管理 Cosmos DB 帳戶本身（建立、刪除、設定 firewall、看 keys） | Owner、Contributor、Cosmos DB Account Reader | Portal → IAM 或 `az role assignment create` |
+| **Cosmos DB Data Plane RBAC**（資料層） | 讀寫 database / container / item 內的資料 | **Cosmos DB Built-in Data Contributor**、Built-in Data Reader | **僅** CLI / ARM / Bicep（Portal IAM 看不到） |
+
+即使是 Subscription **Owner**，也只是「管理層」權限，**不會自動授予資料層權限**。所以你必須在 Cosmos DB 帳戶上**額外**指派 Data Plane 角色，本專案的 SDK 操作才能成功。
+
+#### 透過 Azure CLI 指派（推薦）
+
+請具備 Cosmos DB 帳戶 Owner 權限的人執行以下指令：
+
+```bash
+# 1. 設定變數
+RESOURCE_GROUP="<your-resource-group>"
+ACCOUNT_NAME="<your-cosmos-account-name>"
+
+# 取得目前登入身份的 principal ID（也可以換成其他使用者 / Service Principal / Managed Identity 的 object ID）
+PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv)
+
+# 2. 取得 Cosmos 帳戶的 resource ID 作為 scope
+SCOPE=$(az cosmosdb show \
+  --name $ACCOUNT_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --query id -o tsv)
+
+# 3. 指派「Cosmos DB Built-in Data Contributor」
+#    角色定義 ID 00000000-0000-0000-0000-000000000002 = Built-in Data Contributor（讀+寫）
+#    若僅需讀取，改用 ...0001（Built-in Data Reader）
+az cosmosdb sql role assignment create \
+  --account-name $ACCOUNT_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --scope "$SCOPE" \
+  --principal-id $PRINCIPAL_ID \
+  --role-definition-id 00000000-0000-0000-0000-000000000002
+```
+
+#### 驗證指派成功
+
+```bash
+az cosmosdb sql role assignment list \
+  --account-name $ACCOUNT_NAME \
+  --resource-group $RESOURCE_GROUP \
+  -o table
+```
+
+看到自己的 `PRINCIPAL_ID` 對應到 `00000000-0000-0000-0000-000000000002` 即代表成功。
+
+#### 注意事項
+
+- **指派後需要幾分鐘才會生效**，不是立刻可用。
+- `--scope` 設為整個帳戶後，未來建立的所有 database / container 都涵蓋；也可以縮小到單一 database 或 container。
+- `az login` 後使用的身分必須跟 `PRINCIPAL_ID` 對應，否則 SDK 拿到的 token 會是別人的。
+- Portal → Cosmos 帳戶 → **Access control (IAM)** 頁面**看不到** Built-in Data Contributor，那裡只能看到管理層 RBAC（這正是讓很多人踩坑的地方）。
 
 ### 2. 安裝相依套件
 
